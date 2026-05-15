@@ -1,0 +1,21 @@
+{
+  "name": "panierbot-playwright",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Playwright scripts for PanierBot",
+  "scripts": {
+    "build-cart": "node build_cart.js",
+    "test-navigator": "node test_navigator_agent.js",
+    "test-product-flow": "node test_product_flow.js",
+    "test-carrefour-flow": "node test_carrefour_flow.js",
+    "test-intermarche-flow": "node test_intermarche_flow.js",
+    "test-extract-products": "node test_extract_products.js",
+    "install-browsers": "npx playwright install",
+    "install-deps": "npx playwright install-deps"
+  },
+  "dependencies": {
+    "minimist": "^1.2.8",
+    "playwright": "^1.54.0"
+  }
+}
