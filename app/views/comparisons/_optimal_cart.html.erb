@@ -1,0 +1,66 @@
+<%# Optimal cart panel partial %>
+<%# Usage: render "comparisons/optimal_cart", optimal_cart: cart_hash, mode: "multi_store" %>
+<%
+  cart  = optimal_cart || {}
+  cart  = cart.transform_keys(&:to_sym) if cart.is_a?(Hash)
+  total = cart[:total].to_f
+  mode  ||= "multi_store"
+%>
+
+<div class="rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-violet-50 p-6 shadow-sm ring-1 ring-indigo-100">
+  <div class="flex items-center justify-between gap-4">
+    <div>
+      <p class="text-sm font-semibold uppercase tracking-wide text-indigo-600">Panier optimal</p>
+      <p class="mt-0.5 text-xs text-slate-500">
+        <% if mode == "multi_store" %>
+          Répartition optimale entre toutes les enseignes
+        <% else %>
+          Sélection optimale dans une enseigne
+        <% end %>
+      </p>
+    </div>
+    <% if total > 0 %>
+      <div class="text-right">
+        <p class="text-3xl font-extrabold text-slate-900">
+          <%= number_to_currency(total, unit: "€", separator: ",", delimiter: " ", precision: 2, format: "%n %u") rescue "#{total} €" %>
+        </p>
+        <p class="text-xs text-slate-500">total estimé</p>
+      </div>
+    <% end %>
+  </div>
+
+  <%# Per-store breakdown (multi_store) %>
+  <% if mode == "multi_store" %>
+    <% stores = cart[:stores] || {} %>
+    <% stores = stores.transform_keys(&:to_s) if stores.is_a?(Hash) %>
+    <% if stores.any? %>
+      <div class="mt-5 space-y-3">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Répartition par enseigne</p>
+        <% stores.each do |store_key, store_data| %>
+          <% sd = store_data.is_a?(Hash) ? store_data.transform_keys(&:to_sym) : {} %>
+          <% store_items = Array(sd[:items]).map { |i| i.is_a?(Hash) ? i.transform_keys(&:to_sym) : {} } %>
+          <div class="rounded-xl border border-slate-200 bg-white p-4">
+            <div class="flex items-center justify-between">
+              <%= render "shared/store_badge", store: store_key %>
+              <span class="font-bold text-slate-900">
+                <%= number_to_currency(sd[:subtotal].to_f, unit: "€", separator: ",", delimiter: " ", precision: 2, format: "%n %u") rescue "#{sd[:subtotal]} €" %>
+              </span>
+            </div>
+            <% if store_items.any? %>
+              <ul class="mt-3 divide-y divide-slate-50">
+                <% store_items.each do |si| %>
+                  <li class="flex items-center justify-between py-1.5 text-sm">
+                    <span class="font-medium text-slate-700"><%= (si[:query] || si[:product_name] || "").capitalize %></span>
+                    <span class="text-slate-900">
+                      <%= number_to_currency(si[:price].to_f, unit: "€", separator: ",", delimiter: " ", precision: 2, format: "%n %u") rescue "#{si[:price]} €" %>
+                    </span>
+                  </li>
+                <% end %>
+              </ul>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+  <% end %>
+</div>

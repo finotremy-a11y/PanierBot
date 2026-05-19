@@ -2037,6 +2037,466 @@ const INTERMARCHE_ADD_TO_CART_SELECTORS = [
   "button[class*='cart' i]"
 ];
 
+const INTERMARCHE_CART_SIGNALS = [
+
+  // ──────────────────────────────────────────────────────────────
+  // Super U / CoursesU Selectors
+  // ──────────────────────────────────────────────────────────────
+
+  const SUPERU_DRIVE_URL = "https://www.coursesu.com/";
+
+  const SUPERU_GEOLOCATION_SELECTORS = [
+    "button:has-text('Autoriser la localisation')",
+    "button:has-text('Autoriser')",
+    "button[aria-label*='localisation' i]",
+    "button[aria-label*='location' i]",
+    "button:has-text('Allow')",
+    "button:has-text('Permettre')"
+  ];
+
+  const SUPERU_STORE_SEARCH_SELECTORS = [
+    "input[type='search']",
+    "input[placeholder*='Où' i]",
+    "input[placeholder*='ou' i]",
+    "input[placeholder*='ville' i]",
+    "input[placeholder*='code postal' i]",
+    "input[name*='store' i]",
+    "input[name*='city' i]",
+    "input[aria-label*='magasin' i]",
+    "input[data-testid*='store-search' i]"
+  ];
+
+  const SUPERU_STORE_CARD_SELECTORS = [
+    "[data-testid*='store-card' i]",
+    "[data-testid*='store-result' i]",
+    "[data-testid*='store-item' i]",
+    "[class*='store-card' i]",
+    "[class*='storeCard' i]",
+    "article[class*='store' i]",
+    "li[class*='store' i]",
+    "div[role='option']",
+    "[role='option']"
+  ];
+
+  const SUPERU_STORE_BUTTON_SELECTORS = [
+    "button:has-text('Choisir ce magasin')",
+    "button:has-text('Choisir ce drive')",
+    "button:has-text('Commencer les courses')",
+    "button:has-text('Commencer mes courses')",
+    "button:has-text('Choisir')",
+    "button:has-text('Sélectionner')",
+    "button:has-text('Selectionner')",
+    "button:has-text('Continuer')",
+    "button[data-testid*='select' i]",
+    "button[data-testid*='choose' i]",
+    "a:has-text('Commencer')"
+  ];
+
+  const SUPERU_STORE_ENTRY_SELECTORS = [
+    "button:has-text('Choisir mon magasin')",
+    "a:has-text('Choisir mon magasin')",
+    "button:has-text('Choisir votre magasin')",
+    "a:has-text('Choisir votre magasin')",
+    "button:has-text('Mon magasin')",
+    "a:has-text('Mon magasin')",
+    "button[data-testid*='store' i]",
+    "a[data-testid*='store' i]"
+  ];
+
+  const SUPERU_SELECTED_STORE_SIGNALS = [
+    "[data-testid*='selected-store' i]",
+    "[data-testid*='store-selected' i]",
+    "[data-testid*='current-store' i]",
+    "[class*='selected-store' i]",
+    "[class*='store-selected' i]",
+    "button:has-text('Changer de magasin')",
+    "a:has-text('Changer de magasin')"
+  ];
+
+  const SUPERU_SEARCH_INPUT_SELECTORS = [
+    "input[type='search']",
+    "input[name='search']",
+    "input[name='q']",
+    "input[id*='search' i]",
+    "input[data-testid*='search' i]",
+    "input[placeholder*='recherche' i]",
+    "input[placeholder*='produit' i]",
+    "input[placeholder*='courses' i]",
+    "input[aria-label*='recherche' i]",
+    "input[aria-label*='produit' i]",
+    "header input[type='text']",
+    "header input[type='search']",
+    "main input[type='text']"
+  ];
+
+  const SUPERU_SEARCH_SUBMIT_SELECTORS = [
+    "button[type='submit']",
+    "button[data-testid*='search' i]",
+    "button[aria-label*='recherche' i]",
+    "button:has-text('Rechercher')",
+    "[role='search'] button"
+  ];
+
+  const SUPERU_PRODUCT_CARD_SELECTORS = [
+    "[data-testid='product-card']",
+    "[data-testid*='product-card' i]",
+    "[data-testid*='product' i]",
+    "article[data-testid*='product' i]",
+    "article[class*='product' i]",
+    "li[class*='product' i]",
+    "div[class*='product-card' i]",
+    "div[class*='productCard' i]",
+    "div[class*='product' i][data-id]",
+    "main article",
+    "main li",
+    "section article",
+    "section li"
+  ];
+
+  const SUPERU_ADD_TO_CART_SELECTORS = [
+    "button[data-testid*='add' i]",
+    "button[aria-label*='ajouter' i]",
+    "button[aria-label*='panier' i]",
+    "button:has-text('Ajouter au panier')",
+    "button:has-text('Ajouter')",
+    "button:has-text('Acheter')",
+    "button[class*='add' i]",
+    "button[class*='cart' i]"
+  ];
+
+  const SUPERU_CART_SIGNALS = [
+    "[data-testid*='cart-count' i]",
+    "[data-testid*='basket-count' i]",
+    "[data-testid*='cart' i] [class*='count' i]",
+    "[data-testid*='cart' i]",
+    "a[href*='panier' i]",
+    "button[aria-label*='panier' i]",
+    "[class*='cart' i] [class*='badge' i]",
+    "[class*='panier' i] [class*='badge' i]"
+  ];
+
+  const SUPERU_COOKIE_ACCEPT_SELECTORS = [
+    "#onetrust-accept-btn-handler",
+    "button:has-text('Tout accepter')",
+    "button:has-text('Accepter')",
+    "button:has-text('J\\'accepte')",
+    "button:has-text('Continuer')",
+    "button[aria-label*='accepter' i]"
+  ];
+
+const SUPERU_DRIVE_URL = "https://www.coursesu.com/";
+
+const SUPERU_GEOLOCATION_SELECTORS = [
+  "button:has-text('Autoriser la localisation')",
+  "button:has-text('Autoriser')",
+  "button[aria-label*='localisation' i]",
+  "button[aria-label*='location' i]",
+  "button:has-text('Allow')",
+  "button:has-text('Permettre')"
+];
+
+const SUPERU_STORE_SEARCH_SELECTORS = [
+  "input[type='search']",
+  "input[placeholder*='Où' i]",
+  "input[placeholder*='ou' i]",
+  "input[placeholder*='ville' i]",
+  "input[placeholder*='code postal' i]",
+  "input[name*='store' i]",
+  "input[name*='city' i]",
+  "input[aria-label*='magasin' i]",
+  "input[data-testid*='store-search' i]"
+];
+
+const SUPERU_STORE_CARD_SELECTORS = [
+  "[data-testid*='store-card' i]",
+  "[data-testid*='store-result' i]",
+  "[data-testid*='store-item' i]",
+  "[class*='store-card' i]",
+  "[class*='storeCard' i]",
+  "article[class*='store' i]",
+  "li[class*='store' i]",
+  "div[role='option']",
+  "[role='option']"
+];
+
+const SUPERU_STORE_BUTTON_SELECTORS = [
+  "button:has-text('Choisir ce magasin')",
+  "button:has-text('Choisir ce drive')",
+  "button:has-text('Commencer les courses')",
+  "button:has-text('Commencer mes courses')",
+  "button:has-text('Choisir')",
+  "button:has-text('Sélectionner')",
+  "button:has-text('Selectionner')",
+  "button:has-text('Continuer')",
+  "button[data-testid*='select' i]",
+  "button[data-testid*='choose' i]",
+  "a:has-text('Commencer')"
+];
+
+const SUPERU_STORE_ENTRY_SELECTORS = [
+  "button:has-text('Choisir mon magasin')",
+  "a:has-text('Choisir mon magasin')",
+  "button:has-text('Choisir votre magasin')",
+  "a:has-text('Choisir votre magasin')",
+  "button:has-text('Mon magasin')",
+  "a:has-text('Mon magasin')",
+  "button[data-testid*='store' i]",
+  "a[data-testid*='store' i]"
+];
+
+const SUPERU_SELECTED_STORE_SIGNALS = [
+  "[data-testid*='selected-store' i]",
+  "[data-testid*='store-selected' i]",
+  "[data-testid*='current-store' i]",
+  "[class*='selected-store' i]",
+  "[class*='store-selected' i]",
+  "button:has-text('Changer de magasin')",
+  "a:has-text('Changer de magasin')"
+];
+
+const SUPERU_SEARCH_INPUT_SELECTORS = [
+  "input[type='search']",
+  "input[name='search']",
+  "input[name='q']",
+  "input[id*='search' i]",
+  "input[data-testid*='search' i]",
+  "input[placeholder*='recherche' i]",
+  "input[placeholder*='produit' i]",
+  "input[placeholder*='courses' i]",
+  "input[aria-label*='recherche' i]",
+  "input[aria-label*='produit' i]",
+  "header input[type='text']",
+  "header input[type='search']",
+  "main input[type='text']"
+];
+
+const SUPERU_SEARCH_SUBMIT_SELECTORS = [
+  "button[type='submit']",
+  "button[data-testid*='search' i]",
+  "button[aria-label*='recherche' i]",
+  "button:has-text('Rechercher')",
+  "[role='search'] button"
+];
+
+const SUPERU_PRODUCT_CARD_SELECTORS = [
+  "[data-testid='product-card']",
+  "[data-testid*='product-card' i]",
+  "[data-testid*='product' i]",
+  "article[data-testid*='product' i]",
+  "article[class*='product' i]",
+  "li[class*='product' i]",
+  "div[class*='product-card' i]",
+  "div[class*='productCard' i]",
+  "div[class*='product' i][data-id]",
+  "main article",
+  "main li",
+  "section article",
+  "section li"
+];
+
+const SUPERU_ADD_TO_CART_SELECTORS = [
+  "button[data-testid*='add' i]",
+  "button[aria-label*='ajouter' i]",
+  "button[aria-label*='panier' i]",
+  "button:has-text('Ajouter au panier')",
+  "button:has-text('Ajouter')",
+  "button:has-text('Acheter')",
+  "button[class*='add' i]",
+  "button[class*='cart' i]"
+];
+
+const SUPERU_CART_SIGNALS = [
+  "[data-testid*='cart-count' i]",
+  "[data-testid*='basket-count' i]",
+  "[data-testid*='cart' i] [class*='count' i]",
+  "[data-testid*='cart' i]",
+  "a[href*='panier' i]",
+  "button[aria-label*='panier' i]",
+  "[class*='cart' i] [class*='badge' i]",
+  "[class*='panier' i] [class*='badge' i]"
+];
+
+const SUPERU_COOKIE_ACCEPT_SELECTORS = [
+  "#onetrust-accept-btn-handler",
+  "button:has-text('Tout accepter')",
+  "button:has-text('Accepter')",
+  "button:has-text('J\\'accepte')",
+  "button:has-text('Continuer')",
+  "button[aria-label*='accepter' i]"
+];
+
+async function dismissSuperUOverlays(page) {
+    // Dismiss geolocation popup
+    for (const selector of SUPERU_GEOLOCATION_SELECTORS) {
+      try {
+        const element = page.locator(selector).first();
+        if (await element.count() > 0 && await element.isVisible({ timeout: 120 })) {
+          await element.click({ timeout: 1200 });
+          await page.waitForTimeout(180);
+          break;
+        }
+      } catch (_) {
+        // best effort only
+      }
+    }
+
+    // Dismiss cookies
+    for (const selector of SUPERU_COOKIE_ACCEPT_SELECTORS) {
+      try {
+        const element = page.locator(selector).first();
+        if (await element.count() > 0 && await element.isVisible({ timeout: 120 })) {
+          await element.click({ timeout: 1200 });
+          await page.waitForTimeout(180);
+          break;
+        }
+      } catch (_) {
+        // best effort only
+      }
+    }
+  }
+
+  for (const selector of INTERMARCHE_POPUP_SELECTORS) {
+    try {
+      const element = page.locator(selector).first();
+      if (await element.count() > 0 && await element.isVisible({ timeout: 120 })) {
+        await element.click({ timeout: 1200 });
+        await page.waitForTimeout(180);
+      }
+    } catch (_) {
+      // best effort only
+    }
+  }
+
+  await page.evaluate(() => {
+    const clean = (value) => String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
+    const wantsClick = [
+      "accepter",
+      "tout accepter",
+      "j'accepte",
+      "fermer",
+      "plus tard",
+      "continuer"
+    ];
+
+    const dispatch = (node) => {
+      try {
+        node.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
+        node.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+        node.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+        node.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+        if (typeof node.click === "function") node.click();
+      } catch (_) {
+        // ignore
+      }
+    };
+
+    const inView = (node) => {
+      const style = window.getComputedStyle(node);
+      if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity || "1") === 0) return false;
+      const rect = node.getBoundingClientRect();
+      return rect.width > 2 && rect.height > 2;
+    };
+
+    const candidates = Array.from(document.querySelectorAll("[role='dialog'] button, .modal button, .popup button, button"));
+    for (const button of candidates) {
+      if (!(button instanceof HTMLElement)) continue;
+      if (!inView(button)) continue;
+      const text = clean(button.textContent || button.getAttribute("aria-label") || button.getAttribute("title") || "");
+      if (!text) continue;
+      if (wantsClick.some((token) => text.includes(token))) {
+        dispatch(button);
+      }
+    }
+  }).catch(() => {});
+}
+/**
+ * Click the arrow of the first Leclerc Drive store in the list to open the detail panel,
+ * then verify the panel is open by waiting for "Choisir ce Drive".
+ *
+ * This function is designed to run inside a Playwright context where `page` is a live
+ * Page object connected to Chrome via CDP.
+ *
+ * @param {import('playwright').Page} page - Active Playwright page.
+ * @param {object} [options]
+ * @param {number} [options.storeListTimeout=20000] - Max ms to wait for the store list.
+ * @param {number} [options.panelTimeout=8000]      - Max ms to wait for the detail panel.
+ * @returns {Promise<{success: boolean, selector: string|null, error: string|null}>}
+ */
+async function selectLeclercDriveArrow(page, options = {}) {
+  const storeListTimeout = Number(options.storeListTimeout) || 20000;
+  const panelTimeout = Number(options.panelTimeout) || 8000;
+
+  // Build a combined CSS selector covering all arrow candidates.
+  const combinedListSelector = LECLERC_ARROW_SELECTORS.join(", ");
+
+  // ── Step 1 : wait for at least one arrow button to appear ───────────────────
+  logger.push("selectLeclercDriveArrow:waiting_for_store_list");
+  try {
+    await page.waitForSelector(combinedListSelector, { timeout: storeListTimeout });
+    console.log("✅ Liste des magasins chargée");
+    logger.push("selectLeclercDriveArrow:store_list_ready");
+  } catch (err) {
+    const msg = `Aucun sélecteur de flèche trouvé après ${storeListTimeout}ms : ${err.message}`;
+    logger.push(`selectLeclercDriveArrow:store_list_timeout ${msg}`);
+    return { success: false, selector: null, error: msg };
+  }
+
+  // ── Step 2 : identify the best matching target in priority order ────────────
+  let resolvedSelector = null;
+  let clickMode = "selector";
+
+  // Prefer actual store cards containing a Drive service (and avoid "Ouverture prochaine").
+  try {
+    const driveCards = page.locator(
+      "section[class*='iel-flex-row'] > :last-child div[class*='iel-cursor-pointer'][class*='iel-flex-col']"
+    );
+    const count = await driveCards.count();
+    for (let i = 0; i < count; i++) {
+      const txt = ((await driveCards.nth(i).textContent()) || "").replace(/\s+/g, " ").trim();
+      if (/drive/i.test(txt) && !/ouverture prochaine/i.test(txt)) {
+        resolvedSelector = `drive-card[nth=${i}]`;
+        clickMode = "drive-card";
+        console.log(`🔍 Carte Drive détectée : ${txt.slice(0, 120)}`);
+        logger.push(`selectLeclercDriveArrow:drive_card_detected index=${i}`);
+        break;
+      }
+    }
+  } catch (_) {
+    // fallback to selector scan below
+  }
+
+  // Fallback: keep legacy selector scan
+  for (const candidate of LECLERC_ARROW_SELECTORS) {
+    if (resolvedSelector) break;
+    try {
+      const el = await page.$(candidate);
+      if (el) {
+        resolvedSelector = candidate;
+        console.log(`🔍 Flèche détectée avec le sélecteur : ${candidate}`);
+        logger.push(`selectLeclercDriveArrow:arrow_detected selector=${candidate}`);
+        break;
+      }
+    } catch (_) {
+      // selector unsupported by engine – try next
+    }
+  }
+
+  if (!resolvedSelector) {
+    const msg = "Aucune flèche de magasin détectée dans le DOM";
+    logger.push(`selectLeclercDriveArrow:no_arrow_found`);
+    return { success: false, selector: null, error: msg };
+  }
+
+  // ── Step 3 : click the selected target ──────────────────────────────────────
+  const firstArrowSelector = resolvedSelector;
+  try {
+    if (clickMode === "drive-card") {
+      const idx = Number((firstArrowSelector.match(/nth=(\d+)/) || [])[1] || 0);
+      const card = page.locator(
+        "section[class*='iel-flex-row'] > :last-child div[class*='iel-cursor-pointer'][class*='iel-flex-col']"
+      ).nth(idx);
+      await card.click({ timeout: 5000 });
+    } else {
       await page.click(firstArrowSelector);
     }
     console.log(`🖱️  Clic effectué sur : ${firstArrowSelector}`);
@@ -5879,4 +6339,4 @@ export {
   searchSuperUProduct,
   extractSuperUProductList,
   addSuperUToCart,
-  snapshotSuperUCartCountconst INTERMARCHE_CART_SIGNALS = [];
+  snapshotSuperUCartCount

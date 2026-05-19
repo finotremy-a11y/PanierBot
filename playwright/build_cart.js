@@ -32,7 +32,7 @@ const POST_ACTION_WAIT_MS = 800;
 const WAIT_MIN_MS = 200;
 const WAIT_MAX_MS = 5000;
 const ACTION_MAX_RETRIES = 2;
-const SUPPORTED_STRATEGIES = new Set(["cheapest", "best_per_kg"]);
+const SUPPORTED_STRATEGIES = new Set(["cheapest", "best_per_kg", "best_per_l", "per_unit"]);
 const AUTH_STATE_PATH = "auth.json";
 const DEBUG_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123 Safari/537.36";
 

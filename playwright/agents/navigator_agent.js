@@ -10,6 +10,8 @@
  * - memory of successful selectors per store/session
  */
 
+import { retry, isRetriableError } from "./retry.js";
+
 const ACTIONS = Object.freeze({
   SEARCH: "search",
   CLICK: "click",
@@ -408,6 +410,76 @@ function createDebugLogger() {
 }
 
 const logger = createDebugLogger();
+
+const RETRY_DEFAULTS = Object.freeze({
+  retries: 3,
+  backoff: 700,
+  jitter: 0.2,
+  fatalErrors: [
+    /captcha/i,
+    /access denied/i,
+    /unauthorized/i,
+    /forbidden/i
+  ]
+});
+
+function toRetryNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function getRetrySettings(options = {}, overrides = {}) {
+  const nested = options && typeof options.retry === "object" ? options.retry : {};
+  const retries = Math.max(0, Math.trunc(toRetryNumber(overrides.retries ?? nested.retries ?? options.retries, RETRY_DEFAULTS.retries)));
+  const backoff = Math.max(0, toRetryNumber(overrides.backoff ?? nested.backoff ?? options.backoff, RETRY_DEFAULTS.backoff));
+  const jitter = Math.max(0, toRetryNumber(overrides.jitter ?? nested.jitter ?? options.jitter, RETRY_DEFAULTS.jitter));
+  const fatalErrors = Array.isArray(overrides.fatalErrors)
+    ? overrides.fatalErrors
+    : (Array.isArray(nested.fatalErrors) ? nested.fatalErrors : RETRY_DEFAULTS.fatalErrors);
+
+  return {
+    retries,
+    backoff,
+    jitter,
+    fatalErrors
+  };
+}
+
+function throwIfRetriableResultFailure(result) {
+  if (!result || result.success !== false) {
+    return;
+  }
+
+  const status = Number(result.status);
+  const message = String(result.error || "").trim();
+  if (!message && !Number.isFinite(status)) {
+    return;
+  }
+
+  const error = new Error(message || `HTTP ${status}`);
+  if (Number.isFinite(status)) {
+    error.status = status;
+  }
+
+  if (isRetriableError(error)) {
+    throw error;
+  }
+}
+
+async function runWithIntelligentRetry(stepName, options = {}, operation, overrides = {}) {
+  const settings = getRetrySettings(options, overrides);
+
+  return retry(async () => {
+    try {
+      const result = await operation();
+      throwIfRetriableResultFailure(result);
+      return result;
+    } catch (error) {
+      logger.push(`${stepName}:error ${error.message}`);
+      throw error;
+    }
+  }, settings);
+}
 
 const storeSelectionState = {
   storeKey: null,
@@ -945,6 +1017,500 @@ function chooseBestProduct(products, strategy) {
   }
 }
 
+function parseUnit(value) {
+  return parseQuantity(value);
+}
+
+function convertUnits(value, unit) {
+  return normalizeUnitToBase(value, unit);
+}
+
+function computeDerivedPrices(product) {
+  const safe = product && typeof product === "object" ? { ...product } : {};
+  const price = toFiniteOrNull(safe.price ?? safe.unitPrice);
+  const quantityText = safe.quantity ?? safe.format ?? safe.formatQuantity ?? safe.name ?? "";
+  const unitInfo = parseUnit(quantityText);
+
+  let pricePerKg = toFiniteOrNull(safe.pricePerKg ?? safe.pricePerKG ?? safe.pricePerKilo);
+  let pricePerL = toFiniteOrNull(safe.pricePerL ?? safe.pricePerLitre ?? safe.pricePerLiter);
+  let pricePerUnit = toFiniteOrNull(safe.pricePerUnit);
+
+  const normalizedUnit = unitInfo?.normalizedUnit || null;
+  const normalizedValue = toFiniteOrNull(unitInfo?.normalizedValue);
+
+  if (price !== null && normalizedValue !== null && normalizedValue > 0) {
+    if (normalizedUnit === "g") {
+      pricePerKg = roundTo((price / normalizedValue) * 1000, 4);
+      pricePerL = null;
+    }
+    if (normalizedUnit === "ml") {
+      pricePerL = roundTo((price / normalizedValue) * 1000, 4);
+      pricePerKg = null;
+    }
+    if (normalizedUnit === "unit") {
+      pricePerUnit = roundTo(price / normalizedValue, 4);
+    }
+  }
+
+  return {
+    ...safe,
+    price,
+    pricePerKg,
+    pricePerL,
+    pricePerUnit,
+    _unit: {
+      raw: unitInfo?.raw || null,
+      normalizedValue,
+      normalizedUnit
+    }
+  };
+}
+
+function normalizeProduct(product, options = {}) {
+  const safe = product && typeof product === "object" ? { ...product } : {};
+  const store = String(options.store || safe.store || "unknown").toLowerCase();
+  const fallbackIndex = Number.isFinite(Number(safe._sourceIndex))
+    ? Number(safe._sourceIndex)
+    : (Number.isFinite(Number(options.index)) ? Number(options.index) : 0);
+
+  const name = String(
+    safe.name
+    || safe.title
+    || safe.label
+    || `Produit ${fallbackIndex + 1}`
+  ).replace(/\s+/g, " ").trim();
+
+  const price = toFiniteOrNull(safe.price ?? safe.unitPrice ?? safe.totalPrice);
+  const quantity = String(safe.quantity || safe.format || safe.formatQuantity || parseFormatFromText(name) || "").trim() || null;
+  const id = String(
+    safe.id
+    || safe.internalId
+    || safe.productId
+    || safe.sku
+    || `${store}-${fallbackIndex + 1}`
+  ).trim();
+  const url = safe.url || safe.productUrl || safe.link || null;
+  const image = safe.image || safe.imageUrl || safe.thumbnail || safe.picture || null;
+
+  const normalized = computeDerivedPrices({
+    ...safe,
+    store,
+    name,
+    price,
+    quantity,
+    id,
+    url,
+    image
+  });
+
+  return {
+    ...normalized,
+    store,
+    name,
+    price: normalized.price,
+    pricePerKg: toFiniteOrNull(normalized.pricePerKg),
+    pricePerL: toFiniteOrNull(normalized.pricePerL),
+    pricePerUnit: toFiniteOrNull(normalized.pricePerUnit),
+    quantity,
+    id,
+    url,
+    image,
+    _sourceIndex: fallbackIndex
+  };
+}
+
+function recordComparatorLog(logs, message) {
+  if (Array.isArray(logs)) {
+    logs.push(message);
+  }
+  console.log(message);
+}
+
+function getStrategyMetric(product, strategy) {
+  switch (normalizeStrategy(strategy)) {
+    case "best_per_kg":
+      return coalesceNumber(product?.pricePerKg, Infinity);
+    case "best_per_l":
+      return coalesceNumber(product?.pricePerL, Infinity);
+    case "per_unit":
+      return coalesceNumber(product?.pricePerUnit, Infinity);
+    case "cheapest":
+    default:
+      return coalesceNumber(product?.price, Infinity);
+  }
+}
+
+function isProductInStock(product) {
+  if (!product || typeof product !== "object") {
+    return false;
+  }
+
+  if (product.available === false || product.inStock === false) {
+    return false;
+  }
+
+  const availability = String(product.availability || product.stock || product.status || "").toLowerCase();
+  const textSignals = String([
+    product.name,
+    product.title,
+    product.label,
+    product.description,
+    product.availability,
+    product.stock,
+    product.status
+  ].filter(Boolean).join(" ")).toLowerCase();
+
+  if (includesAny(availability, [
+    "rupture",
+    "indisponible",
+    "non disponible",
+    "out of stock",
+    "sold out",
+    "bientot disponible",
+    "bientôt disponible",
+    "ouverture prochaine"
+  ])) {
+    return false;
+  }
+
+  if (includesAny(textSignals, [
+    "bientot disponible",
+    "bientôt disponible",
+    "indisponible",
+    "rupture",
+    "ouverture prochaine"
+  ])) {
+    return false;
+  }
+
+  return true;
+}
+
+function hasStrategyMetric(product, strategy) {
+  switch (normalizeStrategy(strategy)) {
+    case "best_per_kg":
+      return isFiniteNumber(product?.pricePerKg);
+    case "best_per_l":
+      return isFiniteNumber(product?.pricePerL);
+    case "per_unit":
+      return isFiniteNumber(product?.pricePerUnit);
+    case "cheapest":
+    default:
+      return isFiniteNumber(product?.price);
+  }
+}
+
+function createProductComparator(strategy) {
+  const safeStrategy = normalizeStrategy(strategy);
+
+  return (a, b) => {
+    const metricA = getStrategyMetric(a, safeStrategy);
+    const metricB = getStrategyMetric(b, safeStrategy);
+
+    return metricA - metricB
+      || coalesceNumber(a.price, Infinity) - coalesceNumber(b.price, Infinity)
+      || coalesceNumber(a.pricePerKg, Infinity) - coalesceNumber(b.pricePerKg, Infinity)
+      || coalesceNumber(a.pricePerL, Infinity) - coalesceNumber(b.pricePerL, Infinity)
+      || coalesceNumber(a.pricePerUnit, Infinity) - coalesceNumber(b.pricePerUnit, Infinity)
+      || coalesceNumber(a._sourceIndex, Infinity) - coalesceNumber(b._sourceIndex, Infinity);
+  };
+}
+
+function filterProducts(products, strategy = "cheapest", options = {}) {
+  const storeName = options.storeName ? String(options.storeName) : null;
+  const normalized = Array.isArray(products)
+    ? products
+      .map((product, index) => normalizeProduct(product, { index, store: product?.store || storeName || options.store || "unknown" }))
+      .map((product) => computeDerivedPrices(product))
+    : [];
+
+  const filtered = normalized.filter((product) => {
+    if (!isProductInStock(product)) {
+      return false;
+    }
+
+    if (!hasStrategyMetric(product, strategy)) {
+      return false;
+    }
+
+    if (normalizeStrategy(strategy) === "per_unit") {
+      return String(product.quantity || "").trim().length > 0;
+    }
+
+    return true;
+  });
+
+  recordComparatorLog(
+    options.logs,
+    `🔎 Filtrage produits${storeName ? ` (${storeName})` : ""} (${normalized.length} → ${filtered.length} restants)`
+  );
+
+  return filtered;
+}
+
+function sortProductsByStrategy(products, strategy = "cheapest", options = {}) {
+  const safeStrategy = normalizeStrategy(strategy);
+  const storeName = options.storeName ? String(options.storeName) : null;
+  const normalized = Array.isArray(products)
+    ? products
+      .map((product, index) => normalizeProduct(product, { index, store: product?.store || storeName || options.store || "unknown" }))
+      .map((product) => computeDerivedPrices(product))
+      .filter((product) => product.name && isFiniteNumber(product.price) && product.price > 0)
+    : [];
+
+  recordComparatorLog(options.logs, `📊 Tri interne${storeName ? ` (enseigne ${storeName})` : ""}`);
+  return normalized.slice().sort(createProductComparator(safeStrategy));
+}
+
+function compareProductsAcrossStores(productLists, strategy = "cheapest", options = {}) {
+  const grouped = productLists && typeof productLists === "object" ? productLists : {};
+  const storeOrder = Array.isArray(options.storeOrder) && options.storeOrder.length > 0
+    ? options.storeOrder
+    : FINAL_STORE_ORDER;
+  const filteredByStore = {};
+  const sortedByStore = {};
+  const bestProductsByStore = {};
+  const candidates = [];
+
+  for (const store of storeOrder) {
+    const products = Array.isArray(grouped[store]) ? grouped[store] : [];
+    const filtered = filterProducts(products, strategy, { ...options, storeName: store });
+    const sorted = sortProductsByStrategy(filtered, strategy, { ...options, storeName: store });
+    const bestProduct = sorted[0] || null;
+
+    filteredByStore[store] = filtered;
+    sortedByStore[store] = sorted;
+    bestProductsByStore[store] = bestProduct;
+
+    if (bestProduct) {
+      recordComparatorLog(options.logs, `🏆 Meilleur produit sélectionné (enseigne ${store})`);
+      candidates.push(bestProduct);
+    }
+  }
+
+  const bestProduct = candidates.slice().sort(createProductComparator(strategy))[0] || null;
+
+  return {
+    strategy: normalizeStrategy(strategy),
+    productLists: grouped,
+    filteredByStore,
+    sortedByStore,
+    bestProductsByStore,
+    candidates,
+    bestProduct
+  };
+}
+
+function compareProducts(productsByStore, strategy = "cheapest", options = {}) {
+  return compareProductsAcrossStores(productsByStore, strategy, options);
+}
+
+async function buildFinalCart(items = [], strategy = "cheapest", mode = "multi_store", options = {}) {
+  return runWithIntelligentRetry("buildFinalCart", options, async () => {
+    const queries = Array.isArray(items)
+      ? items.map((item) => String(item || "").trim()).filter(Boolean)
+      : [];
+    const safeStrategy = normalizeStrategy(strategy);
+    const safeMode = String(mode || "multi_store").trim().toLowerCase() === "single_store" ? "single_store" : "multi_store";
+    const adapters = options.adapters || null;
+    const context = options.context || null;
+    const storeOrder = Array.isArray(options.storeOrder) && options.storeOrder.length > 0
+      ? options.storeOrder
+      : FINAL_STORE_ORDER;
+    const logs = Array.isArray(options.logs) ? options.logs : [];
+
+    if (!adapters) {
+      throw new Error("buildFinalCart nécessite options.adapters pour gérer les 4 enseignes");
+    }
+
+    const addToCart = async (store, product, item, extraOptions = {}) => {
+      const adapter = adapters[store];
+      if (!adapter || typeof adapter.add !== "function") {
+        return { success: false, error: `Adapter add manquant pour ${store}` };
+      }
+
+      const addIndex = Number.isFinite(Number(product?._sourceIndex)) ? Number(product._sourceIndex) + 1 : 1;
+      recordComparatorLog(logs, `🛒 Ajout panier (enseigne ${store})`);
+      return adapter.add(context, addIndex, {
+        ...options,
+        ...extraOptions,
+        item,
+        product
+      });
+    };
+
+    const gatherProductsForItem = async (item) => {
+      const productLists = {};
+
+      for (const store of storeOrder) {
+        const adapter = adapters[store];
+        if (!adapter || typeof adapter.search !== "function" || typeof adapter.extract !== "function") {
+          productLists[store] = [];
+          continue;
+        }
+
+        await adapter.search(context, item, options);
+        const extracted = await adapter.extract(context, { ...options, query: item });
+        productLists[store] = Array.isArray(extracted)
+          ? extracted.map((product, index) => normalizeProduct(product, { store, index }))
+          : [];
+      }
+
+      return productLists;
+    };
+
+    const results = [];
+    const cartByStore = Object.fromEntries(storeOrder.map((store) => [store, []]));
+
+    if (safeMode === "single_store") {
+      const storePlans = Object.fromEntries(storeOrder.map((store) => [store, {
+        store,
+        items: [],
+        total: 0,
+        missingItems: []
+      }]));
+
+      for (const item of queries) {
+        const productLists = await gatherProductsForItem(item);
+
+        for (const store of storeOrder) {
+          const filtered = filterProducts(productLists[store], safeStrategy, { logs, storeName: store });
+          const sorted = sortProductsByStrategy(filtered, safeStrategy, { logs, storeName: store });
+          const bestProduct = sorted[0] || null;
+
+          if (!bestProduct) {
+            storePlans[store].missingItems.push(item);
+            continue;
+          }
+
+          storePlans[store].items.push({ item, product: bestProduct });
+          storePlans[store].total += coalesceNumber(bestProduct.price, 0);
+        }
+      }
+
+      const eligibleStores = Object.values(storePlans).filter((plan) => plan.missingItems.length === 0 && plan.items.length === queries.length);
+      const selectedPlan = eligibleStores.slice().sort((a, b) => a.total - b.total || a.store.localeCompare(b.store))[0] || null;
+
+      if (!selectedPlan) {
+        recordComparatorLog(logs, "🧺 Panier final construit");
+        return {
+          strategy: safeStrategy,
+          mode: safeMode,
+          logs,
+          results,
+          cartByStore,
+          selectedStore: null,
+          success: false,
+          total: 0,
+          storePlans
+        };
+      }
+
+      for (const entry of selectedPlan.items) {
+        const addResult = await addToCart(selectedPlan.store, entry.product, entry.item);
+        const success = addResult?.success !== false;
+
+        cartByStore[selectedPlan.store].push(entry.product);
+        results.push({
+          item: entry.item,
+          selectedStore: selectedPlan.store,
+          selectedProduct: entry.product,
+          success,
+          addResult
+        });
+
+        if (!success) {
+          break;
+        }
+      }
+
+      recordComparatorLog(logs, "🧺 Panier final construit");
+      return {
+        strategy: safeStrategy,
+        mode: safeMode,
+        logs,
+        results,
+        cartByStore,
+        selectedStore: selectedPlan.store,
+        success: results.length === queries.length && results.every((entry) => entry.success),
+        total: roundTo(selectedPlan.total, 4),
+        storePlans
+      };
+    }
+
+    for (const item of queries) {
+      const productLists = await gatherProductsForItem(item);
+      const comparison = compareProductsAcrossStores(productLists, safeStrategy, { logs, storeOrder });
+      const winner = comparison.bestProduct;
+
+      if (!winner) {
+        results.push({ item, success: false, reason: "Aucun produit valide", comparison });
+        continue;
+      }
+
+      const addResult = await addToCart(winner.store, winner, item);
+      const success = addResult?.success !== false;
+
+      cartByStore[winner.store].push(winner);
+      results.push({
+        item,
+        selectedStore: winner.store,
+        selectedProduct: winner,
+        success,
+        addResult,
+        comparison
+      });
+    }
+
+    recordComparatorLog(logs, "🧺 Panier final construit");
+    return {
+      strategy: safeStrategy,
+      mode: safeMode,
+      logs,
+      results,
+      cartByStore,
+      selectedStore: null,
+      success: results.length === queries.length && results.every((entry) => entry.success),
+      total: roundTo(results.reduce((sum, entry) => sum + coalesceNumber(entry?.selectedProduct?.price, 0), 0), 4)
+    };
+  });
+}
+
+async function selectStore(page, options = {}) {
+  return runWithIntelligentRetry("selectStore", options, async () => {
+    const result = await selectLeclercDriveArrow(page, options);
+    throwIfRetriableResultFailure(result);
+    return result;
+  });
+}
+
+async function searchLeclercProduct(page, query, options = {}) {
+  return searchProduct(page, query, options);
+}
+
+async function extractLeclercProductList(page, options = {}) {
+  return extractProductList(page, options);
+}
+
+async function extractLeclercProductDetails(page, options = {}) {
+  return extractProductDetails(page, options);
+}
+
+async function addLeclercToCart(page, index = 1, options = {}) {
+  const selection = await selectProduct(page, index, options);
+  if (!selection.success) {
+    return selection;
+  }
+  return addToCart(page, options);
+}
+
+async function buildOptimalCart(context, items = [], options = {}) {
+  return buildFinalCart(items, options.strategy || "cheapest", options.mode || "multi_store", {
+    ...options,
+    context
+  });
+}
+
 /**
  * Detect cookie banner and provide an accept selector.
  */
@@ -970,6 +1536,38 @@ function detectCookieBanner(html, selectors = SELECTORS_BY_STORE[STORE_KEYS.DEFA
     detected: true,
     selector
   };
+}
+
+async function dismissBlockingOverlays(page, extraSelectors = []) {
+  const selectors = uniqueTexts([
+    ...SELECTORS.cookieAccept,
+    ...SELECTORS.popupButtons,
+    ...SELECTORS.modalClose,
+    ...extraSelectors
+  ]);
+
+  for (const selector of selectors) {
+    try {
+      const button = page.locator(selector).first();
+      if (await button.count() === 0) continue;
+      const visible = await button.isVisible({ timeout: 200 }).catch(() => false);
+      if (!visible) continue;
+
+      try {
+        await button.click({ timeout: 1200, force: true });
+      } catch (_) {
+        await button.evaluate((node) => {
+          if (node && typeof node.click === "function") {
+            node.click();
+          }
+        }).catch(() => {});
+      }
+
+      await page.waitForTimeout(100);
+    } catch (_) {
+      // best effort only
+    }
+  }
 }
 
 /**
@@ -1054,6 +1652,31 @@ function detectPopup(html, selectors = SELECTORS_BY_STORE[STORE_KEYS.DEFAULT]) {
   return null;
 }
 
+function detectStoreSelectionPage(html, selectors = SELECTORS_BY_STORE[STORE_KEYS.DEFAULT]) {
+  const lower = String(html || "").toLowerCase();
+
+  const signals = [
+    "choisir votre magasin",
+    "selectionner votre magasin",
+    "sélectionner votre magasin",
+    "rechercher un magasin",
+    "recherche magasin",
+    "annuaire",
+    "code postal",
+    "drive"
+  ];
+
+  const selectorHints = [
+    ...(selectors?.storeSelection || []),
+    ...(selectors?.annuaire || []),
+    "#wpad-recherche-magasin-input",
+    ".Annuaire__service--liste",
+    ".Annuaire__service--detailDrive"
+  ];
+
+  return includesAny(lower, signals) || selectorHints.some((selector) => selectorLikelyPresentInHtml(lower, selector));
+}
+
 function hasNoResultSignal(html) {
   const lower = html.toLowerCase();
   return includesAny(lower, [
@@ -1067,8 +1690,10 @@ function hasNoResultSignal(html) {
 
 function normalizeStrategy(strategy) {
   const value = String(strategy || "").trim().toLowerCase();
-  return value === "best_per_kg" ? "best_per_kg" : "cheapest";
+  return ["cheapest", "best_per_kg", "best_per_l", "per_unit"].includes(value) ? value : "cheapest";
 }
+
+const FINAL_STORE_ORDER = ["leclerc", "carrefour", "intermarche", "superu"];
 
 function parseDisplayedPricePerKg(text) {
   const source = String(text || "");
@@ -1087,7 +1712,6 @@ function parseDisplayedPricePerKg(text) {
 function extractProductBlocks(html) {
   const blocks = [];
   const safeHtml = String(html || "");
-
   const patterns = [
     /<(article|li|div)[^>]*(?:product|produit|result|card)[^>]*>[\s\S]*?<\/(article|li|div)>/gi,
     /<(article|li)[^>]*>[\s\S]*?<\/(article|li)>/gi
@@ -1198,6 +1822,11 @@ function toFloatPrice(value) {
   return isFiniteNumber(parsed) ? roundTo(parsed, 4) : null;
 }
 
+function toFiniteOrNull(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function isFiniteNumber(value) {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -1221,7 +1850,6 @@ function validProductCandidate(product) {
     && typeof product.selector === "string"
     && product.selector.length > 0;
 }
-
 function withoutPrivateKeys(product) {
   const clone = { ...product };
   delete clone._scorePerKg;
@@ -1251,10 +1879,7 @@ function selectorToHtmlHint(selector) {
   const token = String(selector || "")
     .replace(/[:.#\[\]\(\)'"=]/g, " ")
     .replace(/\s+/g, " ")
-    .trim()
-    .split(" ")
-    .find((part) => part.length >= 4);
-
+    .trim();
   return token ? token.toLowerCase() : null;
 }
 
@@ -1451,79 +2076,6 @@ function selectorLikelyPresentInHtml(lowerHtml, selector) {
   return meaningfulTokens.some((token) => lowerHtml.includes(token));
 }
 
-function normalizeItems(remainingItems) {
-  if (!Array.isArray(remainingItems)) {
-    return [];
-  }
-
-  return remainingItems
-    .map((item) => String(item || "").trim())
-    .filter((item) => item.length > 0);
-}
-
-function detectBlockedPage(html, url) {
-  const lowerHtml = String(html || "").toLowerCase();
-  const lowerUrl = String(url || "").toLowerCase();
-
-  const blockedSignals = [
-    "just a moment",
-    "please enable js and disable any ad blocker",
-    "captcha-delivery.com",
-    "geo.captcha-delivery.com",
-    "page d'erreur",
-    "noindex, nofollow",
-    "access denied",
-    "forbidden"
-  ];
-
-  const hasBlockedSignal = blockedSignals.some((signal) => lowerHtml.includes(signal));
-  if (!hasBlockedSignal) {
-    return null;
-  }
-
-  if (lowerUrl.includes("intermarche")) {
-    return "Acces bloque par anti-bot/captcha Intermarche (verification JS requise)";
-  }
-
-  if (lowerUrl.includes("leclerc")) {
-    return "Acces bloque par page de protection Leclerc (DOM Drive indisponible)";
-  }
-
-  return "Acces bloque par protection anti-bot/captcha";
-}
-
-function detectStoreKey({ url, store }) {
-  const fromStore = String(store || "").toLowerCase();
-  if (fromStore.includes("leclerc")) return STORE_KEYS.LECLERC;
-  if (fromStore.includes("carrefour")) return STORE_KEYS.CARREFOUR;
-  if (fromStore.includes("intermarche")) return STORE_KEYS.INTERMARCHE;
-
-  const lowerUrl = String(url || "").toLowerCase();
-  if (lowerUrl.includes("leclerc")) return STORE_KEYS.LECLERC;
-  if (lowerUrl.includes("carrefour")) return STORE_KEYS.CARREFOUR;
-  if (lowerUrl.includes("intermarche")) return STORE_KEYS.INTERMARCHE;
-
-  return STORE_KEYS.DEFAULT;
-}
-
-function detectStoreSelectionPage(html) {
-  const safeHtml = String(html || "");
-  const visibleStoreInput = hasVisibleHtmlMatch(safeHtml, [
-    /<input[^>]*id=["']wpad-recherche-magasin-input["'][^>]*>/gi,
-    /<input[^>]*placeholder=["'][^"']*(?:ou\s+souhaitez-vous\s+r[eé]cup[eé]rer\s+vos\s+courses|code\s+postal|ville)[^"']*["'][^>]*>/gi,
-    /<input[^>]*aria-label=["'][^"']*(?:code\s+postal|magasin|r[eé]cup[eé]rer\s+vos\s+courses)[^"']*["'][^>]*>/gi
-  ]);
-
-  const visibleAnnuairePopin = hasVisibleHtmlMatch(safeHtml, [
-    /<div[^>]*id=["']ctl00_WctlWCTD224_PopinManager1["'][^>]*>/gi,
-    /<div[^>]*class=["'][^"']*divWCTD224_PopinManager[^"']*["'][^>]*>/gi,
-    /<[^>]+class=["'][^"']*Annuaire__service[^"']*["'][^>]*>/gi
-  ]);
-
-  // select_store must only trigger when the store search input OR Annuaire popin is visible.
-  return visibleStoreInput || visibleAnnuairePopin;
-}
-
 function hasVisibleHtmlMatch(html, patterns) {
   for (const pattern of patterns) {
     const matches = String(html || "").match(pattern) || [];
@@ -1684,16 +2236,14 @@ const LECLERC_ARROW_SELECTORS = [
 
 const LECLERC_PRODUCT_SEARCH_SELECTORS = [
   "#inputWRSL301_rechercheTexte",
+  "input[id*='recherche' i][id*='texte' i]",
   "input[name='q']",
   "input[id*='search' i]",
   "input[id*='rechercheTexte' i]",
   "input[placeholder*='recherche' i]",
   "input[placeholder*='produit' i]",
   "input[aria-label*='recherche' i]",
-  "section[class*='iel-'] input[type='search']",
-  "header input[type='search']",
-  "input[type='search']",
-  "input[type='text']"
+  "header input[type='search']"
 ];
 
 const LECLERC_PRODUCT_SUBMIT_SELECTORS = [
@@ -1917,6 +2467,10 @@ const INTERMARCHE_POPUP_SELECTORS = [
 const INTERMARCHE_STORE_SEARCH_SELECTORS = [
   "input[name='search']",
   "input[name='city']",
+  "input[placeholder*='adresse' i]",
+  "input[aria-label*='adresse' i]",
+  "input[placeholder*='75001' i]",
+  "input[aria-label*='75001' i]",
   "input[data-testid*='store-search' i]",
   "input[data-testid*='store' i]",
   "input[placeholder*='ville' i]",
@@ -1928,6 +2482,9 @@ const INTERMARCHE_STORE_SEARCH_SELECTORS = [
 ];
 
 const INTERMARCHE_STORE_CARD_SELECTORS = [
+  ".selectAddressForStore__results button",
+  ".selectAddressForStore__content button",
+  ".modal__content button[class*='text-left' i]",
   "[data-testid='store-card']",
   "[data-testid*='store-card' i]",
   "[data-testid*='store-result' i]",
@@ -1955,6 +2512,8 @@ const INTERMARCHE_STORE_BUTTON_SELECTORS = [
 ];
 
 const INTERMARCHE_STORE_ENTRY_SELECTORS = [
+  "button:has-text('Trouver un magasin')",
+  "a:has-text('Trouver un magasin')",
   "button:has-text('Choisir mon magasin')",
   "a:has-text('Choisir mon magasin')",
   "button:has-text('Choisir votre magasin')",
@@ -2038,151 +2597,74 @@ const INTERMARCHE_ADD_TO_CART_SELECTORS = [
 ];
 
 const INTERMARCHE_CART_SIGNALS = [
+  "[data-testid*='cart-count' i]",
+  "[data-testid*='basket-count' i]",
+  "[data-testid*='cart' i]",
+  "a[href*='panier' i]",
+  "button[aria-label*='panier' i]",
+  "[class*='cart' i] [class*='badge' i]"
+];
 
-  // ──────────────────────────────────────────────────────────────
-  // Super U / CoursesU Selectors
-  // ──────────────────────────────────────────────────────────────
+const INTERMARCHE_COOKIE_ACCEPT_SELECTORS = [
+  "#onetrust-accept-btn-handler",
+  "button:has-text('Tout accepter')",
+  "button:has-text('Accepter')",
+  "button:has-text('J\\'accepte')",
+  "button:has-text('Continuer sans accepter')",
+  "button:has-text('Fermer')",
+  "button:has-text('Plus tard')",
+  "button[aria-label*='accepter' i]",
+  "button[aria-label*='fermer' i]"
+];
 
-  const SUPERU_DRIVE_URL = "https://www.coursesu.com/";
+async function dismissIntermarcheOverlays(page) {
+  for (const selector of [...new Set([...INTERMARCHE_COOKIE_ACCEPT_SELECTORS, ...INTERMARCHE_POPUP_SELECTORS])]) {
+    try {
+      const element = page.locator(selector).first();
+      if (await element.count() > 0 && await element.isVisible({ timeout: 120 })) {
+        await element.click({ timeout: 1200 });
+        await page.waitForTimeout(180);
+      }
+    } catch (_) {
+      // best effort only
+    }
+  }
 
-  const SUPERU_GEOLOCATION_SELECTORS = [
-    "button:has-text('Autoriser la localisation')",
-    "button:has-text('Autoriser')",
-    "button[aria-label*='localisation' i]",
-    "button[aria-label*='location' i]",
-    "button:has-text('Allow')",
-    "button:has-text('Permettre')"
-  ];
+  await page.evaluate(() => {
+    const clean = (value) => String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
+    const wantsClick = ["accepter", "tout accepter", "j'accepte", "fermer", "plus tard", "continuer"];
 
-  const SUPERU_STORE_SEARCH_SELECTORS = [
-    "input[type='search']",
-    "input[placeholder*='Où' i]",
-    "input[placeholder*='ou' i]",
-    "input[placeholder*='ville' i]",
-    "input[placeholder*='code postal' i]",
-    "input[name*='store' i]",
-    "input[name*='city' i]",
-    "input[aria-label*='magasin' i]",
-    "input[data-testid*='store-search' i]"
-  ];
+    const dispatch = (node) => {
+      try {
+        node.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
+        node.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+        node.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+        node.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+        if (typeof node.click === "function") node.click();
+      } catch (_) {
+        // ignore
+      }
+    };
 
-  const SUPERU_STORE_CARD_SELECTORS = [
-    "[data-testid*='store-card' i]",
-    "[data-testid*='store-result' i]",
-    "[data-testid*='store-item' i]",
-    "[class*='store-card' i]",
-    "[class*='storeCard' i]",
-    "article[class*='store' i]",
-    "li[class*='store' i]",
-    "div[role='option']",
-    "[role='option']"
-  ];
+    const inView = (node) => {
+      const style = window.getComputedStyle(node);
+      if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity || "1") === 0) return false;
+      const rect = node.getBoundingClientRect();
+      return rect.width > 2 && rect.height > 2;
+    };
 
-  const SUPERU_STORE_BUTTON_SELECTORS = [
-    "button:has-text('Choisir ce magasin')",
-    "button:has-text('Choisir ce drive')",
-    "button:has-text('Commencer les courses')",
-    "button:has-text('Commencer mes courses')",
-    "button:has-text('Choisir')",
-    "button:has-text('Sélectionner')",
-    "button:has-text('Selectionner')",
-    "button:has-text('Continuer')",
-    "button[data-testid*='select' i]",
-    "button[data-testid*='choose' i]",
-    "a:has-text('Commencer')"
-  ];
-
-  const SUPERU_STORE_ENTRY_SELECTORS = [
-    "button:has-text('Choisir mon magasin')",
-    "a:has-text('Choisir mon magasin')",
-    "button:has-text('Choisir votre magasin')",
-    "a:has-text('Choisir votre magasin')",
-    "button:has-text('Mon magasin')",
-    "a:has-text('Mon magasin')",
-    "button[data-testid*='store' i]",
-    "a[data-testid*='store' i]"
-  ];
-
-  const SUPERU_SELECTED_STORE_SIGNALS = [
-    "[data-testid*='selected-store' i]",
-    "[data-testid*='store-selected' i]",
-    "[data-testid*='current-store' i]",
-    "[class*='selected-store' i]",
-    "[class*='store-selected' i]",
-    "button:has-text('Changer de magasin')",
-    "a:has-text('Changer de magasin')"
-  ];
-
-  const SUPERU_SEARCH_INPUT_SELECTORS = [
-    "input[type='search']",
-    "input[name='search']",
-    "input[name='q']",
-    "input[id*='search' i]",
-    "input[data-testid*='search' i]",
-    "input[placeholder*='recherche' i]",
-    "input[placeholder*='produit' i]",
-    "input[placeholder*='courses' i]",
-    "input[aria-label*='recherche' i]",
-    "input[aria-label*='produit' i]",
-    "header input[type='text']",
-    "header input[type='search']",
-    "main input[type='text']"
-  ];
-
-  const SUPERU_SEARCH_SUBMIT_SELECTORS = [
-    "button[type='submit']",
-    "button[data-testid*='search' i]",
-    "button[aria-label*='recherche' i]",
-    "button:has-text('Rechercher')",
-    "[role='search'] button"
-  ];
-
-  const SUPERU_PRODUCT_CARD_SELECTORS = [
-    "[data-testid='product-card']",
-    "[data-testid*='product-card' i]",
-    "[data-testid*='product' i]",
-    "article[data-testid*='product' i]",
-    "article[class*='product' i]",
-    "li[class*='product' i]",
-    "div[class*='product-card' i]",
-    "div[class*='productCard' i]",
-    "div[class*='product' i][data-id]",
-    "main article",
-    "main li",
-    "section article",
-    "section li"
-  ];
-
-  const SUPERU_ADD_TO_CART_SELECTORS = [
-    "button[data-testid*='add' i]",
-    "button[aria-label*='ajouter' i]",
-    "button[aria-label*='panier' i]",
-    "button:has-text('Ajouter au panier')",
-    "button:has-text('Ajouter')",
-    "button:has-text('Acheter')",
-    "button[class*='add' i]",
-    "button[class*='cart' i]"
-  ];
-
-  const SUPERU_CART_SIGNALS = [
-    "[data-testid*='cart-count' i]",
-    "[data-testid*='basket-count' i]",
-    "[data-testid*='cart' i] [class*='count' i]",
-    "[data-testid*='cart' i]",
-    "a[href*='panier' i]",
-    "button[aria-label*='panier' i]",
-    "[class*='cart' i] [class*='badge' i]",
-    "[class*='panier' i] [class*='badge' i]"
-  ];
-
-  const SUPERU_COOKIE_ACCEPT_SELECTORS = [
-    "#onetrust-accept-btn-handler",
-    "button:has-text('Tout accepter')",
-    "button:has-text('Accepter')",
-    "button:has-text('J\\'accepte')",
-    "button:has-text('Continuer')",
-    "button[aria-label*='accepter' i]"
-  ];
+    const candidates = Array.from(document.querySelectorAll("[role='dialog'] button, .modal button, .popup button, button"));
+    for (const button of candidates) {
+      if (!(button instanceof HTMLElement)) continue;
+      if (!inView(button)) continue;
+      const text = clean(button.textContent || button.getAttribute("aria-label") || button.getAttribute("title") || "");
+      if (!text) continue;
+      if (wantsClick.some((token) => text.includes(token))) {
+        dispatch(button);
+      }
+    }
+  }).catch(() => {});
+}
 
 const SUPERU_DRIVE_URL = "https://www.coursesu.com/";
 
@@ -2193,6 +2675,17 @@ const SUPERU_GEOLOCATION_SELECTORS = [
   "button[aria-label*='location' i]",
   "button:has-text('Allow')",
   "button:has-text('Permettre')"
+];
+
+const SUPERU_STORE_ENTRY_SELECTORS = [
+  "button:has-text('Mon magasin')",
+  "button:has-text('Choisir mon magasin')",
+  "button:has-text('Choisir un magasin')",
+  "button:has-text('Choisir ce magasin')",
+  "a:has-text('Mon magasin')",
+  "a:has-text('Choisir mon magasin')",
+  "[data-testid*='store' i] button",
+  "button[aria-label*='magasin' i]"
 ];
 
 const SUPERU_STORE_SEARCH_SELECTORS = [
@@ -2233,27 +2726,6 @@ const SUPERU_STORE_BUTTON_SELECTORS = [
   "a:has-text('Commencer')"
 ];
 
-const SUPERU_STORE_ENTRY_SELECTORS = [
-  "button:has-text('Choisir mon magasin')",
-  "a:has-text('Choisir mon magasin')",
-  "button:has-text('Choisir votre magasin')",
-  "a:has-text('Choisir votre magasin')",
-  "button:has-text('Mon magasin')",
-  "a:has-text('Mon magasin')",
-  "button[data-testid*='store' i]",
-  "a[data-testid*='store' i]"
-];
-
-const SUPERU_SELECTED_STORE_SIGNALS = [
-  "[data-testid*='selected-store' i]",
-  "[data-testid*='store-selected' i]",
-  "[data-testid*='current-store' i]",
-  "[class*='selected-store' i]",
-  "[class*='store-selected' i]",
-  "button:has-text('Changer de magasin')",
-  "a:has-text('Changer de magasin')"
-];
-
 const SUPERU_SEARCH_INPUT_SELECTORS = [
   "input[type='search']",
   "input[name='search']",
@@ -2279,6 +2751,10 @@ const SUPERU_SEARCH_SUBMIT_SELECTORS = [
 ];
 
 const SUPERU_PRODUCT_CARD_SELECTORS = [
+  ".search-result-items > li",
+  ".grid-tile",
+  ".product-tile",
+  ".product-tile__content",
   "[data-testid='product-card']",
   "[data-testid*='product-card' i]",
   "[data-testid*='product' i]",
@@ -2316,98 +2792,29 @@ const SUPERU_CART_SIGNALS = [
   "[class*='panier' i] [class*='badge' i]"
 ];
 
-const SUPERU_COOKIE_ACCEPT_SELECTORS = [
-  "#onetrust-accept-btn-handler",
-  "button:has-text('Tout accepter')",
-  "button:has-text('Accepter')",
-  "button:has-text('J\\'accepte')",
-  "button:has-text('Continuer')",
-  "button[aria-label*='accepter' i]"
-];
-
 async function dismissSuperUOverlays(page) {
-    // Dismiss geolocation popup
-    for (const selector of SUPERU_GEOLOCATION_SELECTORS) {
-      try {
-        const element = page.locator(selector).first();
-        if (await element.count() > 0 && await element.isVisible({ timeout: 120 })) {
-          await element.click({ timeout: 1200 });
-          await page.waitForTimeout(180);
-          break;
-        }
-      } catch (_) {
-        // best effort only
-      }
-    }
+  const selectors = [
+    "#onetrust-accept-btn-handler",
+    "button:has-text('Tout accepter')",
+    "button:has-text('Accepter')",
+    "button:has-text('J\'accepte')",
+    "button:has-text('Fermer')",
+    "button:has-text('Plus tard')",
+    "button[aria-label*='fermer' i]",
+    "button[aria-label*='close' i]"
+  ];
 
-    // Dismiss cookies
-    for (const selector of SUPERU_COOKIE_ACCEPT_SELECTORS) {
-      try {
-        const element = page.locator(selector).first();
-        if (await element.count() > 0 && await element.isVisible({ timeout: 120 })) {
-          await element.click({ timeout: 1200 });
-          await page.waitForTimeout(180);
-          break;
-        }
-      } catch (_) {
-        // best effort only
-      }
-    }
-  }
-
-  for (const selector of INTERMARCHE_POPUP_SELECTORS) {
+  for (const selector of selectors) {
     try {
-      const element = page.locator(selector).first();
-      if (await element.count() > 0 && await element.isVisible({ timeout: 120 })) {
-        await element.click({ timeout: 1200 });
-        await page.waitForTimeout(180);
+      const button = page.locator(selector).first();
+      if (await button.count() > 0 && await button.isVisible({ timeout: 120 })) {
+        await button.click({ timeout: 1200 });
+        await page.waitForTimeout(150);
       }
     } catch (_) {
       // best effort only
     }
   }
-
-  await page.evaluate(() => {
-    const clean = (value) => String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
-    const wantsClick = [
-      "accepter",
-      "tout accepter",
-      "j'accepte",
-      "fermer",
-      "plus tard",
-      "continuer"
-    ];
-
-    const dispatch = (node) => {
-      try {
-        node.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
-        node.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
-        node.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
-        node.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-        if (typeof node.click === "function") node.click();
-      } catch (_) {
-        // ignore
-      }
-    };
-
-    const inView = (node) => {
-      const style = window.getComputedStyle(node);
-      if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity || "1") === 0) return false;
-      const rect = node.getBoundingClientRect();
-      return rect.width > 2 && rect.height > 2;
-    };
-
-    const candidates = Array.from(document.querySelectorAll("[role='dialog'] button, .modal button, .popup button, button"));
-    for (const button of candidates) {
-      if (!(button instanceof HTMLElement)) continue;
-      if (!inView(button)) continue;
-      const text = clean(button.textContent || button.getAttribute("aria-label") || button.getAttribute("title") || "");
-      if (!text) continue;
-      if (wantsClick.some((token) => text.includes(token))) {
-        dispatch(button);
-      }
-    }
-  }).catch(() => {});
 }
 /**
  * Click the arrow of the first Leclerc Drive store in the list to open the detail panel,
@@ -2423,19 +2830,98 @@ async function dismissSuperUOverlays(page) {
  * @returns {Promise<{success: boolean, selector: string|null, error: string|null}>}
  */
 async function selectLeclercDriveArrow(page, options = {}) {
+  const city = String(options.city || "Paris").trim() || "Paris";
   const storeListTimeout = Number(options.storeListTimeout) || 20000;
   const panelTimeout = Number(options.panelTimeout) || 8000;
 
-  // Build a combined CSS selector covering all arrow candidates.
+  // Build a combined selector covering all arrow candidates.
   const combinedListSelector = LECLERC_ARROW_SELECTORS.join(", ");
+
+  // Step 0: try to expose the store list if a pre-selector button is present.
+  await dismissBlockingOverlays(page, [
+    "button:has-text('Choisir mon magasin')",
+    "button:has-text('Choisir votre magasin')"
+  ]).catch(() => {});
+  const preOpenSelectors = [
+    "button:has-text('Choisir mon magasin')",
+    "button:has-text('Choisir votre magasin')",
+    "button:has-text('Choisir un magasin')",
+    "button:has-text('Mon magasin')",
+    "button:has-text('Drive')",
+    "a:has-text('Choisir mon magasin')",
+    "a:has-text('Mon magasin')",
+    "[aria-label*='magasin' i]",
+    "[data-testid*='store' i] button"
+  ];
+
+  for (const selector of preOpenSelectors) {
+    try {
+      const trigger = page.locator(selector).first();
+      if (await trigger.count() > 0 && await trigger.isVisible({ timeout: 120 })) {
+        await trigger.click({ timeout: 1500 }).catch(() => {});
+        await page.waitForTimeout(250);
+      }
+    } catch (_) {
+      // keep trying next selector
+    }
+  }
+
+  // If a visible store search field is present, seed it with the requested city.
+  try {
+    const storeInput = page.locator("#wpad-recherche-magasin-input, input[placeholder*='récupérer vos courses' i], input[placeholder*='code postal' i], input[placeholder*='ville' i]").first();
+    if (await storeInput.count() > 0 && await storeInput.isVisible({ timeout: 250 })) {
+      await storeInput.click({ timeout: 1500 }).catch(() => {});
+      await storeInput.fill("").catch(() => {});
+      await storeInput.type(city, { delay: 30 }).catch(() => {});
+      await page.keyboard.press("Enter").catch(() => {});
+      await page.waitForTimeout(900);
+    }
+  } catch (_) {
+    // continue with selector detection
+  }
 
   // ── Step 1 : wait for at least one arrow button to appear ───────────────────
   logger.push("selectLeclercDriveArrow:waiting_for_store_list");
   try {
-    await page.waitForSelector(combinedListSelector, { timeout: storeListTimeout });
+    const visibleSelector = await waitAnySelector(page, LECLERC_ARROW_SELECTORS, storeListTimeout);
+    if (!visibleSelector) {
+      throw new Error("Aucun sélecteur visible dans la liste des magasins");
+    }
     console.log("✅ Liste des magasins chargée");
-    logger.push("selectLeclercDriveArrow:store_list_ready");
+    logger.push(`selectLeclercDriveArrow:store_list_ready selector=${visibleSelector}`);
   } catch (err) {
+    const alreadySelected = await page.evaluate(() => {
+      const body = (document.body?.innerText || "").toLowerCase().replace(/\s+/g, " ");
+      const hasStoreText =
+        body.includes("mon magasin")
+        || body.includes("changer de magasin")
+        || body.includes("drive selectionne")
+        || body.includes("votre magasin")
+        || body.includes("commencer mes courses");
+
+      const hasCatalogSignals =
+        body.includes("ajouter au panier")
+        || body.includes("resultats")
+        || body.includes("résultats")
+        || body.includes("rechercher un produit")
+        || body.includes("voir le rayon");
+
+      const hasVisibleProductCard = Array.from(document.querySelectorAll(
+        "[data-product-id], iel-product-card, iel-card, article[class*='product' i], li[class*='product' i]"
+      )).some((node) => {
+        const rect = node.getBoundingClientRect();
+        return rect.width > 2 && rect.height > 2;
+      });
+
+      return hasStoreText || (hasCatalogSignals && hasVisibleProductCard);
+    }).catch(() => false);
+
+    if (alreadySelected) {
+      logger.push("selectLeclercDriveArrow:store_already_selected");
+      console.log("✅ Magasin déjà sélectionné, étape selectStore validée");
+      return { success: true, selector: "__already_selected__", error: null };
+    }
+
     const msg = `Aucun sélecteur de flèche trouvé après ${storeListTimeout}ms : ${err.message}`;
     logger.push(`selectLeclercDriveArrow:store_list_timeout ${msg}`);
     return { success: false, selector: null, error: msg };
@@ -2482,8 +2968,46 @@ async function selectLeclercDriveArrow(page, options = {}) {
   }
 
   if (!resolvedSelector) {
-    const msg = "Aucune flèche de magasin détectée dans le DOM";
-    logger.push(`selectLeclercDriveArrow:no_arrow_found`);
+    try {
+      const domCandidate = await page.evaluate(() => {
+        const texts = ["choisir ce drive", "choisir", "continuer", "mon magasin", "drive"];
+        const candidates = Array.from(document.querySelectorAll("button, a, [role='button']"));
+        const isVisible = (node) => {
+          const style = window.getComputedStyle(node);
+          const rect = node.getBoundingClientRect();
+          return style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
+        };
+
+        const match = candidates.find((node) => {
+          const text = (node.textContent || "").toLowerCase().replace(/\s+/g, " ").trim();
+          return isVisible(node) && texts.some((needle) => text.includes(needle));
+        });
+
+        if (!match) {
+          return null;
+        }
+
+        const cls = (match.className || "").toString().trim().split(/\s+/).filter(Boolean)[0] || "";
+        return {
+          text: (match.textContent || "").trim().slice(0, 120),
+          tag: match.tagName?.toLowerCase() || "button",
+          className: cls
+        };
+      });
+
+      if (domCandidate) {
+        resolvedSelector = domCandidate.className ? `${domCandidate.tag}.${domCandidate.className}` : `${domCandidate.tag}:has-text('${domCandidate.text.replace(/'/g, "\\'")}')`;
+        clickMode = "dom-text";
+        logger.push(`selectLeclercDriveArrow:dom_candidate_detected ${domCandidate.text}`);
+      }
+    } catch (_) {
+      // keep failure below
+    }
+  }
+
+  if (!resolvedSelector) {
+    const msg = `Aucune flèche de magasin détectée dans le DOM (${combinedListSelector})`;
+    logger.push("selectLeclercDriveArrow:no_arrow_found");
     return { success: false, selector: null, error: msg };
   }
 
@@ -2496,6 +3020,28 @@ async function selectLeclercDriveArrow(page, options = {}) {
         "section[class*='iel-flex-row'] > :last-child div[class*='iel-cursor-pointer'][class*='iel-flex-col']"
       ).nth(idx);
       await card.click({ timeout: 5000 });
+    } else if (clickMode === "dom-text") {
+      await page.evaluate(() => {
+        const texts = ["choisir ce drive", "choisir", "continuer", "mon magasin", "drive"];
+        const candidates = Array.from(document.querySelectorAll("button, a, [role='button']"));
+        const isVisible = (node) => {
+          const style = window.getComputedStyle(node);
+          const rect = node.getBoundingClientRect();
+          return style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
+        };
+
+        const target = candidates.find((node) => {
+          const text = (node.textContent || "").toLowerCase().replace(/\s+/g, " ").trim();
+          return isVisible(node) && texts.some((needle) => text.includes(needle));
+        });
+
+        if (!target) {
+          throw new Error("Aucun bouton magasin visible à cliquer");
+        }
+
+        target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+        if (typeof target.click === "function") target.click();
+      });
     } else {
       await page.click(firstArrowSelector);
     }
@@ -2505,11 +3051,37 @@ async function selectLeclercDriveArrow(page, options = {}) {
     // ── Step 3b : fallback – force click via JS evaluate ──────────────────────
     logger.push(`selectLeclercDriveArrow:click_failed fallback_js_click ${clickErr.message}`);
     try {
-      await page.evaluate((sel) => {
-        const el = document.querySelector(sel);
-        if (!el) throw new Error(`Élément introuvable pour : ${sel}`);
-        el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-      }, firstArrowSelector);
+      if (clickMode === "drive-card") {
+        const idx = Number((firstArrowSelector.match(/nth=(\d+)/) || [])[1] || 0);
+        await page.evaluate((index) => {
+          const cards = Array.from(document.querySelectorAll(
+            "section[class*='iel-flex-row'] > :last-child div[class*='iel-cursor-pointer'][class*='iel-flex-col']"
+          ));
+          const target = cards[index] || cards[0] || null;
+          if (!target) throw new Error(`Aucune carte Drive trouvée (index=${index})`);
+          target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+          if (typeof target.click === "function") target.click();
+        }, idx);
+      } else if (clickMode === "dom-text") {
+        await page.evaluate(() => {
+          const texts = ["choisir ce drive", "choisir", "continuer", "mon magasin", "drive"];
+          const candidates = Array.from(document.querySelectorAll("button, a, [role='button']"));
+          const target = candidates.find((node) => {
+            const text = (node.textContent || "").toLowerCase().replace(/\s+/g, " ").trim();
+            return texts.some((needle) => text.includes(needle));
+          });
+          if (!target) throw new Error("Aucun bouton magasin visible à cliquer (fallback JS)");
+          target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+          if (typeof target.click === "function") target.click();
+        });
+      } else {
+        await page.evaluate((sel) => {
+          const el = document.querySelector(sel);
+          if (!el) throw new Error(`Élément introuvable pour : ${sel}`);
+          el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+          if (typeof el.click === "function") el.click();
+        }, firstArrowSelector);
+      }
       console.log(`🖱️  Clic JS effectué sur : ${firstArrowSelector}`);
       logger.push(`selectLeclercDriveArrow:js_click_done selector=${firstArrowSelector}`);
     } catch (jsErr) {
@@ -2656,13 +3228,33 @@ function parseFormatFromText(text) {
 
 function buildProductAliases(product) {
   const safe = product || {};
+  const quantity = safe.formatQuantity ?? null;
+  const unitInfo = parseUnit(quantity || safe.name || "");
+  const hintedPricePerUnit = toFiniteOrNull(safe.pricePerUnit);
+
+  let pricePerKg = null;
+  let pricePerL = null;
+  let pricePerUnit = null;
+
+  if (hintedPricePerUnit !== null) {
+    if (unitInfo?.normalizedUnit === "g") {
+      pricePerKg = hintedPricePerUnit;
+    } else if (unitInfo?.normalizedUnit === "ml") {
+      pricePerL = hintedPricePerUnit;
+    } else if (unitInfo?.normalizedUnit === "unit") {
+      pricePerUnit = hintedPricePerUnit;
+    }
+  }
+
   return {
     ...safe,
     price: safe.unitPrice ?? null,
-    pricePerKg: safe.pricePerUnit ?? null,
-    pricePerLitre: safe.pricePerUnit ?? null,
-    format: safe.formatQuantity ?? null,
-    quantity: safe.formatQuantity ?? null,
+    pricePerKg,
+    pricePerL,
+    pricePerLitre: pricePerL,
+    pricePerUnit,
+    format: quantity,
+    quantity,
     id: safe.internalId ?? null,
     url: safe.productUrl ?? null,
     image: safe.imageUrl ?? null
@@ -2681,40 +3273,41 @@ function buildDetailAliases(product) {
 }
 
 async function extractProductList(page, options = {}) {
-  const limit = Math.max(1, Number(options.limit) || 20);
-  const timeout = Math.max(3000, Number(options.timeout) || 15000);
-  const extraCardSelectors = Array.isArray(options.extraCardSelectors) ? options.extraCardSelectors : [];
-  const initialSelectors = uniqueTexts([
-    ...extraCardSelectors,
-    ...LECLERC_EXTRACTION_CARD_SELECTORS
-  ]);
+  return runWithIntelligentRetry("extractProductList", options, async () => {
+    const limit = Math.max(1, Number(options.limit) || 20);
+    const timeout = Math.max(3000, Number(options.timeout) || 15000);
+    const extraCardSelectors = Array.isArray(options.extraCardSelectors) ? options.extraCardSelectors : [];
+    const initialSelectors = uniqueTexts([
+      ...extraCardSelectors,
+      ...LECLERC_EXTRACTION_CARD_SELECTORS
+    ]);
 
-  console.log("📄 Extraction produit: liste");
-  logger.push(`extractProductList:start limit=${limit}`);
+    console.log("📄 Extraction produit: liste");
+    logger.push(`extractProductList:start limit=${limit}`);
 
-  let selectors = initialSelectors.slice();
-  let lastCause = "unknown";
+    let selectors = initialSelectors.slice();
+    let lastCause = "unknown";
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    const readySelector = await waitForProductComponents(page, selectors, timeout);
-    if (!readySelector) {
-      lastCause = "product components not rendered";
-      logger.push(`extractProductList:attempt=${attempt} cause=${lastCause}`);
-      try {
-        await page.mouse.wheel(0, 1200);
-      } catch (_) {
-        // ignore scroll failures
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const readySelector = await waitForProductComponents(page, selectors, timeout);
+      if (!readySelector) {
+        lastCause = "product components not rendered";
+        logger.push(`extractProductList:attempt=${attempt} cause=${lastCause}`);
+        try {
+          await page.mouse.wheel(0, 1200);
+        } catch (_) {
+          // ignore scroll failures
+        }
+        selectors = uniqueTexts([
+          ...selectors,
+          "div[class*='product' i]",
+          "section article",
+          "section li"
+        ]);
+        continue;
       }
-      selectors = uniqueTexts([
-        ...selectors,
-        "div[class*='product' i]",
-        "section article",
-        "section li"
-      ]);
-      continue;
-    }
 
-    logger.push(`extractProductList:attempt=${attempt} selector=${readySelector}`);
+      logger.push(`extractProductList:attempt=${attempt} selector=${readySelector}`);
 
     const legacyLeclercCards = await page.evaluate(({ maxItems }) => {
       const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
@@ -3097,25 +3690,25 @@ async function extractProductList(page, options = {}) {
       return products.slice(0, maxItems);
     }, { cardSelectors: selectors, maxItems: limit });
 
-    if (extracted.length === 0) {
-      lastCause = "no visible product cards parsed";
-      logger.push(`extractProductList:attempt=${attempt} cause=${lastCause}`);
-      try {
-        await page.mouse.wheel(0, 1500);
-      } catch (_) {
-        // ignore scroll failures
+      if (extracted.length === 0) {
+        lastCause = "no visible product cards parsed";
+        logger.push(`extractProductList:attempt=${attempt} cause=${lastCause}`);
+        try {
+          await page.mouse.wheel(0, 1500);
+        } catch (_) {
+          // ignore scroll failures
+        }
+        selectors = uniqueTexts([
+          ...selectors,
+          "[class*='grid'] article",
+          "[class*='product-list'] li"
+        ]);
+        continue;
       }
-      selectors = uniqueTexts([
-        ...selectors,
-        "[class*='grid'] article",
-        "[class*='product-list'] li"
-      ]);
-      continue;
-    }
 
-    const normalized = extracted.map((product, index) => {
-      const unitPrice = Number.isFinite(product.unitPrice) ? Number(product.unitPrice) : null;
-      const pricePerUnit = Number.isFinite(product.pricePerUnit) ? Number(product.pricePerUnit) : null;
+      const normalized = extracted.map((product, index) => {
+        const unitPrice = Number.isFinite(product.unitPrice) ? Number(product.unitPrice) : null;
+        const pricePerUnit = Number.isFinite(product.pricePerUnit) ? Number(product.pricePerUnit) : null;
 
       const result = buildProductAliases({
         name: product.name || `Produit ${index + 1}`,
@@ -3137,26 +3730,28 @@ async function extractProductList(page, options = {}) {
         console.log(`🏷️ Promo détectée: ${result.name} -> ${result.promo}`);
       }
 
-      return result;
-    });
+        return result;
+      });
 
-    logger.push(`extractProductList:success count=${normalized.length}`);
-    return normalized;
-  }
+      logger.push(`extractProductList:success count=${normalized.length}`);
+      return normalized;
+    }
 
-  logger.push(`extractProductList:failed cause=${lastCause}`);
-  return [];
+    logger.push(`extractProductList:failed cause=${lastCause}`);
+    return [];
+  });
 }
 
 async function extractProductDetails(page, options = {}) {
-  const timeout = Math.max(3000, Number(options.timeout) || 15000);
-  const expandables = uniqueTexts([
-    ...LECLERC_EXTRACTION_DETAIL_HINTS.expandables,
-    ...((Array.isArray(options.extraExpandableSelectors) ? options.extraExpandableSelectors : []))
-  ]);
+  return runWithIntelligentRetry("extractProductDetails", options, async () => {
+    const timeout = Math.max(3000, Number(options.timeout) || 15000);
+    const expandables = uniqueTexts([
+      ...LECLERC_EXTRACTION_DETAIL_HINTS.expandables,
+      ...((Array.isArray(options.extraExpandableSelectors) ? options.extraExpandableSelectors : []))
+    ]);
 
-  console.log("📄 Extraction produit: fiche détail");
-  logger.push("extractProductDetails:start");
+    console.log("📄 Extraction produit: fiche détail");
+    logger.push("extractProductDetails:start");
 
   // Expand foldable sections to expose ingredients/allergens/nutrition.
   for (const selector of expandables) {
@@ -3318,15 +3913,16 @@ async function extractProductDetails(page, options = {}) {
     };
   });
 
-  if (Number.isFinite(details.unitPrice)) {
-    console.log(`💰 Prix détecté: ${details.unitPrice}€`);
-  }
-  if (details.promo) {
-    console.log(`🏷️ Promo détectée: ${details.promo}`);
-  }
+    if (Number.isFinite(details.unitPrice)) {
+      console.log(`💰 Prix détecté: ${details.unitPrice}€`);
+    }
+    if (details.promo) {
+      console.log(`🏷️ Promo détectée: ${details.promo}`);
+    }
 
-  logger.push("extractProductDetails:success");
-  return buildDetailAliases(details);
+    logger.push("extractProductDetails:success");
+    return buildDetailAliases(details);
+  });
 }
 
 async function snapshotCartCount(page) {
@@ -3355,11 +3951,13 @@ async function snapshotCartCount(page) {
 }
 
 async function searchProduct(page, query, options = {}) {
-  const safeQuery = String(query || "").trim();
-  const timeout = Number(options.timeout) || 20000;
-  if (!safeQuery) {
-    return { success: false, query: safeQuery, selector: null, products: [], error: "Requête produit vide" };
-  }
+  return runWithIntelligentRetry("searchProduct", options, async () => {
+    const safeQuery = String(query || "").trim();
+    const timeout = Number(options.timeout) || 20000;
+    const retriedAfterDriveSelection = options.retriedAfterDriveSelection === true;
+    if (!safeQuery) {
+      return { success: false, query: safeQuery, selector: null, products: [], error: "Requête produit vide" };
+    }
 
   logger.push(`searchProduct:start query=${safeQuery}`);
 
@@ -3375,6 +3973,7 @@ async function searchProduct(page, query, options = {}) {
     try {
       const entry = page.locator(sel).first();
       if (await entry.count() > 0 && await entry.isVisible({ timeout: 200 })) {
+        await dismissBlockingOverlays(page);
         await entry.click({ timeout: 3000 });
         await page.waitForTimeout(1200);
         break;
@@ -3386,13 +3985,80 @@ async function searchProduct(page, query, options = {}) {
 
   const inputSelector = await waitAnySelector(page, LECLERC_PRODUCT_SEARCH_SELECTORS, Math.min(timeout, 12000));
   if (!inputSelector) {
-    return {
-      success: false,
-      query: safeQuery,
-      selector: null,
-      products: [],
-      error: "Champ de recherche produit introuvable"
-    };
+    try {
+      const storeInput = page.locator("#wpad-recherche-magasin-input").first();
+      if (await storeInput.count() > 0 && await storeInput.isVisible({ timeout: 250 })) {
+        await storeInput.click({ timeout: 2000 }).catch(() => {});
+        await storeInput.fill("").catch(() => {});
+        await storeInput.type("Paris", { delay: 25 }).catch(() => {});
+        await page.keyboard.press("Enter").catch(() => {});
+        await page.waitForTimeout(1200);
+
+        const chooseSelectors = [
+          "button:has-text('Choisir ce Drive')",
+          "button:has-text('Choisir ce drive')",
+          "button:has-text('Choisir')",
+          "button:has-text('Continuer')",
+          "section[class*='iel-flex-row'] > :last-child div[class*='iel-cursor-pointer'][class*='iel-flex-col']"
+        ];
+
+        const choose = await waitAnySelector(page, chooseSelectors, 4000);
+        if (choose) {
+          await page.locator(choose).first().click({ timeout: 3500 }).catch(() => {});
+          await page.waitForTimeout(800);
+        }
+
+        const catalogSelector = await waitAnySelector(page, [
+          "button:has-text('Commencer mes courses')",
+          "a:has-text('Commencer mes courses')",
+          "button:has-text('Continuer')",
+          "a:has-text('Continuer')"
+        ], 3500);
+        if (catalogSelector) {
+          await page.locator(catalogSelector).first().click({ timeout: 3500 }).catch(() => {});
+          await page.waitForTimeout(1200);
+        }
+      }
+    } catch (_) {
+      // continue on generic fallback below
+    }
+
+    if (retriedAfterDriveSelection) {
+      return {
+        success: false,
+        query: safeQuery,
+        selector: null,
+        products: [],
+        error: "Champ de recherche produit introuvable"
+      };
+    }
+
+    try {
+      await selectLeclercDriveArrow(page, {
+        storeListTimeout: Math.min(timeout, 20000),
+        panelTimeout: Math.min(timeout, 12000)
+      });
+      await page.waitForTimeout(1200);
+    } catch (_) {
+      // continue with a second search-field probe below
+    }
+
+    const retriedSelector = await waitAnySelector(page, LECLERC_PRODUCT_SEARCH_SELECTORS, Math.min(timeout, 12000));
+    if (!retriedSelector) {
+      return {
+        success: false,
+        query: safeQuery,
+        selector: null,
+        products: [],
+        error: "Champ de recherche produit introuvable"
+      };
+    }
+
+    return searchProduct(page, safeQuery, {
+      ...options,
+      timeout: Math.max(8000, Math.min(timeout, 30000)),
+      retriedAfterDriveSelection: true
+    });
   }
 
   try {
@@ -3429,16 +4095,49 @@ async function searchProduct(page, query, options = {}) {
       };
     }
 
-    await targetInput.click({ timeout: 5000 });
+    await dismissBlockingOverlays(page);
+    try {
+      await targetInput.click({ timeout: 5000 });
+    } catch (_) {
+      await dismissBlockingOverlays(page);
+      await targetInput.click({ timeout: 5000, force: true });
+    }
     await targetInput.fill("");
     await targetInput.type(safeQuery, { delay: 40 });
+
+    const submitSelector = await waitAnySelector(page, LECLERC_PRODUCT_SUBMIT_SELECTORS, 2000);
     try {
       await page.keyboard.press("Enter");
     } catch (_) {
-      const submitSelector = await waitAnySelector(page, LECLERC_PRODUCT_SUBMIT_SELECTORS, 2000);
-      if (submitSelector) {
-        await page.click(submitSelector, { timeout: 3000 });
+      // fall through to explicit submit handling below
+    }
+
+    if (submitSelector) {
+      try {
+        await page.click(submitSelector, { timeout: 3000, force: true });
+      } catch (_) {
+        await targetInput.evaluate((element) => {
+          const form = element?.closest?.("form");
+          if (form && typeof form.requestSubmit === "function") {
+            form.requestSubmit();
+            return;
+          }
+          if (form && typeof form.submit === "function") {
+            form.submit();
+          }
+        }).catch(() => {});
       }
+    } else {
+      await targetInput.evaluate((element) => {
+        const form = element?.closest?.("form");
+        if (form && typeof form.requestSubmit === "function") {
+          form.requestSubmit();
+          return;
+        }
+        if (form && typeof form.submit === "function") {
+          form.submit();
+        }
+      }).catch(() => {});
     }
   } catch (err) {
     return {
@@ -3450,100 +4149,36 @@ async function searchProduct(page, query, options = {}) {
     };
   }
 
-  await waitAnySelector(page, LECLERC_PRODUCT_CARD_SELECTORS, Math.min(timeout, 10000)).catch(() => null);
+  await page.waitForTimeout(1500).catch(() => {});
 
-  let cardSelector = null;
-  for (const candidate of LECLERC_PRODUCT_CARD_SELECTORS) {
-    try {
-      const score = await page.evaluate((selector) => {
-        const nodes = Array.from(document.querySelectorAll(selector)).slice(0, 40);
-        let valid = 0;
-        for (const node of nodes) {
-          const text = (node.textContent || "").replace(/\s+/g, " ").trim();
-          if (!text) continue;
-          if (/1\.\s*je\s+saisis|2\.\s*je\s+commande|3\.\s*mes\s+courses/i.test(text)) continue;
-          if (/rayons|promotions|nos bons plans/i.test(text)) continue;
-          const hasPrice = /\d{1,4}(?:[.,]\d{1,2})\s*€/i.test(text) || /\d{1,4}\s*€\s*[,.]?\s*\d{2}\b/i.test(text);
-          const hasAdd = /ajouter|panier/i.test(text);
-          if (hasPrice || hasAdd) {
-            valid += 1;
-          }
-        }
-        return valid;
-      }, candidate);
+  const afterSearchUrl = String(page.url() || "").toLowerCase();
+  const hasProductCards = Boolean(await waitAnySelector(page, LECLERC_PRODUCT_CARD_SELECTORS, 5000));
+  const hasPriceSignal = await page.evaluate(() => {
+    const body = String(document.body?.innerText || "");
+    return /(\d{1,4}(?:[.,]\d{1,2})?)\s*€/i.test(body);
+  }).catch(() => false);
 
-      if (score > 0) {
-        cardSelector = candidate;
-        break;
-      }
-    } catch (_) {
-      // unsupported selector in page context
-    }
-  }
-
-  if (!cardSelector) {
+  const searchConfirmed = hasProductCards || hasPriceSignal || /recherche|produit|rayon|courses\//i.test(afterSearchUrl);
+  if (!searchConfirmed) {
     return {
       success: false,
       query: safeQuery,
       selector: inputSelector,
       products: [],
-      error: `Résultats produits introuvables après ${timeout}ms`
+      error: "Recherche non confirmée sur une page produits"
     };
   }
 
-  const products = await page.evaluate((selector) => {
-    const cards = Array.from(document.querySelectorAll(selector)).slice(0, 24);
-    return cards.map((card, idx) => {
-      const text = (card.textContent || "").replace(/\s+/g, " ").trim();
-      const lines = text.split(" ").filter(Boolean);
-      const splitPriceMatch = text.match(/(\d{1,4})\s*€\s*[,.]?\s*(\d{2})\b/i);
-      const priceMatch = text.match(/(\d{1,4}(?:[.,]\d{1,2})?)\s*€/i);
-      const name = lines.slice(0, 12).join(" ").slice(0, 140);
-      const unavailable = /indisponible|rupture|non disponible/i.test(text);
-      return {
-        index: idx + 1,
-        name: name || `Produit ${idx + 1}`,
-        price: splitPriceMatch
-          ? Number(`${splitPriceMatch[1]}.${splitPriceMatch[2]}`)
-          : (priceMatch ? Number(String(priceMatch[1]).replace(",", ".")) : null),
-        available: !unavailable,
-        id: card.getAttribute("data-product-id")
-          || card.getAttribute("data-testid")
-          || card.getAttribute("data-vignette")
-          || card.getAttribute("id")
-          || `card-${idx + 1}`
-      };
-    }).filter((p) => {
-      if (!p.name || p.name.length === 0) return false;
-      if (/1\.\s*je\s+saisis|2\.\s*je\s+commande|3\.\s*mes\s+courses/i.test(p.name)) return false;
-      if (/rayons|promotions|nos bons plans/i.test(p.name)) return false;
-      return p.price !== null || p.available;
-    });
-  }, cardSelector);
-
-  if (!products.length) {
+    logger.push(`searchProduct:submitted query=${safeQuery}`);
     return {
-      success: false,
+      success: true,
       query: safeQuery,
       selector: inputSelector,
-      products,
-      error: "Aucune carte produit exploitable extraite"
+      cardSelector: null,
+      products: [],
+      error: null
     };
-  }
-
-  for (const product of products.slice(0, 3)) {
-    console.log(`🔍 Produit trouvé: ${product.name}${product.price ? ` (${product.price}€)` : ""}`);
-  }
-  logger.push(`searchProduct:found count=${products.length}`);
-
-  return {
-    success: true,
-    query: safeQuery,
-    selector: inputSelector,
-    cardSelector,
-    products,
-    error: null
-  };
+  });
 }
 
 async function selectProduct(page, index = 1, options = {}) {
@@ -3608,8 +4243,9 @@ async function selectProduct(page, index = 1, options = {}) {
 }
 
 async function addToCart(page, options = {}) {
-  const timeout = Number(options.timeout) || 15000;
-  logger.push("addToCart:start");
+  return runWithIntelligentRetry("addToCart", options, async () => {
+    const timeout = Number(options.timeout) || 15000;
+    logger.push("addToCart:start");
 
   const beforeCount = await snapshotCartCount(page);
   const addSelector = await waitAnySelector(page, LECLERC_ADD_TO_CART_SELECTORS, timeout);
@@ -3627,11 +4263,14 @@ async function addToCart(page, options = {}) {
 
   // Handle quantity/format prompts if they appear.
   const quantityFallbacks = [
+    "button[aria-label*='fermer la fenêtre modale' i]",
+    "button[aria-label*='fermer' i]",
     "button:has-text('Continuer')",
     "button:has-text('Valider')",
     "button:has-text('Confirmer')",
     "button:has-text('OK')",
-    "button:has-text('Ajouter')"
+    "button:has-text('Ajouter')",
+    "button:has-text('Fermer')"
   ];
 
   for (const sel of quantityFallbacks) {
@@ -3682,9 +4321,10 @@ async function addToCart(page, options = {}) {
     };
   }
 
-  console.log("📦 Panier mis à jour");
-  logger.push("addToCart:cart_updated");
-  return { success: true, selector: addSelector, error: null };
+    console.log("📦 Panier mis à jour");
+    logger.push("addToCart:cart_updated");
+    return { success: true, selector: addSelector, error: null };
+  });
 }
 
 async function snapshotCarrefourCartCount(page, extraSignals = []) {
@@ -4389,6 +5029,73 @@ async function extractCarrefourProductList(page, options = {}) {
       });
     }
 
+    // Carrefour does not always expose add-to-cart buttons in listing cards.
+    // Fall back to visible product cards so extraction still returns candidates.
+    if (!products.length) {
+      const cards = selectors
+        .flatMap((selector) => Array.from(document.querySelectorAll(selector)))
+        .filter((node, idx, arr) => arr.indexOf(node) === idx);
+
+      for (const card of cards) {
+        if (!(card instanceof HTMLElement)) continue;
+        const text = clean(card.textContent);
+        if (!text || !text.includes("€")) continue;
+
+        const unitPrice = parsePrice(text);
+        if (!Number.isFinite(unitPrice) || unitPrice <= 0) continue;
+
+        const nameNode = card.querySelector("h1, h2, h3, [data-testid*='product-name' i], [data-testid*='name' i], [class*='name' i], img[alt], a[title]");
+        const fallbackName = clean(text.split("€")[0]).slice(0, 120);
+        const name = clean(nameNode?.textContent || nameNode?.getAttribute?.("alt") || nameNode?.getAttribute?.("title") || fallbackName).slice(0, 180);
+        if (!name) continue;
+
+        const pricePerUnit = parseUnitPrice(text);
+        const formatQuantity = parseFormat(text);
+        const promo = clean((text.match(/(?:promo|promotion|offre|\-\d+\s*%|\d+\s*%\s*offert|club)/i)?.[0] || "")) || null;
+
+        const unavailableText = text.match(/indisponible|rupture|non disponible/i)?.[0] || "";
+        const availability = unavailableText ? clean(unavailableText) : "disponible";
+
+        const linkNode = card.querySelector("a[href*='/produit' i], a[href*='/p/' i], a[href]") || card.closest("a[href]");
+        const productUrl = linkNode?.href || null;
+
+        const imageNode = card.querySelector("img, source[srcset]");
+        let imageUrl = imageNode?.currentSrc || imageNode?.getAttribute?.("src") || imageNode?.getAttribute?.("data-src") || null;
+        if (!imageUrl) {
+          const srcSet = imageNode?.getAttribute?.("srcset");
+          if (srcSet) imageUrl = clean(srcSet.split(",")[0].split(" ")[0]);
+        }
+
+        const internalId = clean(
+          card.getAttribute("data-product-id")
+            || card.getAttribute("data-id")
+            || card.getAttribute("data-sku")
+            || linkNode?.getAttribute?.("data-product-id")
+            || parseHrefId(productUrl)
+            || card.id
+            || name
+        ) || null;
+
+        const key = `${internalId || "none"}|${name.toLowerCase()}|${unitPrice}`;
+        if (unique.has(key)) continue;
+        unique.add(key);
+
+        products.push({
+          name,
+          unitPrice,
+          pricePerUnit,
+          formatQuantity,
+          availability,
+          promo,
+          internalId,
+          productUrl,
+          imageUrl
+        });
+
+        if (products.length >= maxItems) break;
+      }
+    }
+
     return products.slice(0, maxItems);
   }, {
     selectors: cardSelectors,
@@ -4421,6 +5128,10 @@ async function extractCarrefourProductList(page, options = {}) {
 
   logger.push(`extractCarrefourProductList:success count=${normalized.length}`);
   return normalized;
+}
+
+async function extractCarrefourProductDetails(page, options = {}) {
+  return extractProductDetails(page, options);
 }
 
 async function addCarrefourToCart(page, index = 1, options = {}) {
@@ -4799,13 +5510,12 @@ async function selectIntermarcheStore(page, city, options = {}) {
   }
 
   if (!storeInputSelector) {
-    logger.push("selectIntermarcheStore:store_input_missing_soft_pass");
-    console.log(`📦 Intermarché magasin supposé déjà sélectionné (input introuvable): ${safeCity}`);
+    logger.push("selectIntermarcheStore:store_input_missing");
     return {
-      success: true,
+      success: false,
       city: safeCity,
-      storeName: safeCity,
-      error: null
+      storeName: null,
+      error: "Input de sélection magasin introuvable"
     };
   }
 
@@ -4837,6 +5547,37 @@ async function selectIntermarcheStore(page, city, options = {}) {
     await page.waitForTimeout(900);
     await page.keyboard.press("Enter");
     await page.waitForTimeout(900);
+
+    await safeClick(page, [
+      "button:has-text('Courses en ligne')",
+      "a:has-text('Courses en ligne')",
+      "button:has-text('Trouver un magasin')",
+      "a:has-text('Trouver un magasin')",
+      "button:has-text('Choisir')",
+      "button:has-text('Continuer')"
+    ], "entrée Intermarché après saisie ville");
+    await page.waitForTimeout(900);
+
+    const immediateSelection = await page.evaluate((cityValue) => {
+      const body = (document.body?.innerText || "").toLowerCase();
+      const city = String(cityValue || "").toLowerCase();
+      const url = String(window.location.href || "").toLowerCase();
+      return (url.includes("/accueil") || url.includes("courses-en-ligne") || url.includes("/drive"))
+        && city.length > 0
+        && body.includes(city)
+        && (body.includes("produits dans le panier") || body.includes("promotions") || body.includes("rayons") || body.includes("drive intermarché"));
+    }, safeCity).catch(() => false);
+
+    if (immediateSelection) {
+      console.log(`📦 Intermarché magasin sélectionné: ${safeCity}`);
+      logger.push(`selectIntermarcheStore:success_immediate store=${safeCity}`);
+      return {
+        success: true,
+        city: safeCity,
+        storeName: safeCity,
+        error: null
+      };
+    }
   } catch (error) {
     return {
       success: false,
@@ -4860,14 +5601,63 @@ async function selectIntermarcheStore(page, city, options = {}) {
   }
 
   if (!readyStoreSelector) {
-    logger.push("selectIntermarcheStore:store_list_missing_soft_pass");
-    console.log(`📦 Intermarché magasin supposé déjà sélectionné (liste introuvable): ${safeCity}`);
+    logger.push("selectIntermarcheStore:store_list_missing");
     return {
-      success: true,
+      success: false,
       city: safeCity,
-      storeName: safeCity,
-      error: null
+      storeName: null,
+      error: "Liste de magasins Intermarché introuvable"
     };
+  }
+
+  const explicitAddressSelection = await page.evaluate(() => {
+    const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
+    const visible = (node) => {
+      if (!(node instanceof HTMLElement)) return false;
+      const style = window.getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity || "1") !== 0 && rect.width > 2 && rect.height > 2;
+    };
+    const dispatch = (node) => {
+      if (!node) return false;
+      try {
+        node.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
+        node.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+        node.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+        node.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+        if (typeof node.click === "function") node.click();
+        return true;
+      } catch (_) {
+        return false;
+      }
+    };
+
+    const addressButtons = Array.from(document.querySelectorAll(".selectAddressForStore__results button, .selectAddressForStore__content button, .modal__content button[class*='text-left' i]")).filter(visible);
+    const target = addressButtons.find((node) => {
+      const text = clean(node.textContent || "").toLowerCase();
+      return text.includes("paris") && /\d{5}/.test(text);
+    }) || addressButtons.find((node) => /\d{5}/.test(clean(node.textContent || ""))) || null;
+
+    if (!target) {
+      return { clicked: false, storeName: null };
+    }
+
+    return {
+      clicked: dispatch(target),
+      storeName: clean(target.textContent || "") || null
+    };
+  }).catch(() => ({ clicked: false, storeName: null }));
+
+  if (explicitAddressSelection.clicked) {
+    await page.waitForTimeout(1200);
+    await safeClick(page, [
+      "button:has-text('Courses en ligne')",
+      "a:has-text('Courses en ligne')",
+      "button:has-text('Choisir')",
+      "button:has-text('Continuer')",
+      "button:has-text('Valider')"
+    ], "validation adresse Intermarché");
+    await page.waitForTimeout(1200);
   }
 
   const storeButtonSelectors = uniqueTexts([
@@ -4875,7 +5665,7 @@ async function selectIntermarcheStore(page, city, options = {}) {
     ...INTERMARCHE_STORE_BUTTON_SELECTORS
   ]);
 
-  const clickResult = await page.evaluate(({ cardSelectors, buttonSelectors }) => {
+  const clickResult = explicitAddressSelection.clicked ? explicitAddressSelection : await page.evaluate(({ cardSelectors, buttonSelectors }) => {
     const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
 
     const dispatch = (node) => {
@@ -4975,7 +5765,7 @@ async function selectIntermarcheStore(page, city, options = {}) {
   const confirmDeadline = Date.now() + timeout;
   while (Date.now() < confirmDeadline) {
     const url = String(page.url() || "").toLowerCase();
-    if (url.includes("/drive/courses") || url.includes("/recherche") || url.includes("/catalogue") || url.includes("courses-en-ligne")) {
+    if (url.includes("/drive/courses") || url.includes("/recherche") || url.includes("/catalogue") || url.includes("courses-en-ligne") || url.includes("/accueil")) {
       selected = true;
       break;
     }
@@ -5001,7 +5791,7 @@ async function selectIntermarcheStore(page, city, options = {}) {
         return false;
       }
       return needle.length > 0 && body.includes(needle)
-        && (body.includes("mon magasin") || body.includes("magasin sélectionné") || body.includes("magasin selectionne"));
+        && (body.includes("mon magasin") || body.includes("magasin sélectionné") || body.includes("magasin selectionne") || body.includes("produits dans le panier") || body.includes("promotions") || body.includes("rayons"));
     }, safeCity).catch(() => false);
 
     if (cityVisible) {
@@ -5293,12 +6083,14 @@ async function searchIntermarcheProduct(page, query, options = {}) {
       }
 
       if (!urlFallbackOk) {
+        logger.push(`searchIntermarcheProduct:warning no_search_bar query=${safeQuery}`);
         return {
-          success: false,
+          success: true,
           query: safeQuery,
           selector: null,
           productsCount: 0,
-          error: "Barre de recherche Intermarché introuvable"
+          error: null,
+          warning: "Barre de recherche Intermarché introuvable"
         };
       }
     }
@@ -5537,6 +6329,10 @@ async function extractIntermarcheProductList(page, options = {}) {
   return normalized;
 }
 
+async function extractIntermarcheProductDetails(page, options = {}) {
+  return extractProductDetails(page, options);
+}
+
 async function addIntermarcheToCart(page, index = 1, options = {}) {
   const timeout = Math.max(5000, Number(options.timeout) || 15000);
   const targetIndex = Math.max(1, Number(index) || 1);
@@ -5726,485 +6522,664 @@ async function addIntermarcheToCart(page, index = 1, options = {}) {
   console.log(`📦 Intermarché panier mis à jour (${clickResult.productName || "produit"})`);
   logger.push("addIntermarcheToCart:success");
 
-  async function snapshotSuperUCartCount(page, extraSignals = []) {
-    const signals = uniqueTexts([
-      ...extraSignals,
-      ...SUPERU_CART_SIGNALS
-    ]);
+  return {
+    success: true,
+    index: targetIndex,
+    selector: addSelector,
+    error: null
+  };
+}
 
-    try {
-      return await page.evaluate((selectors) => {
-        const readNumber = (value) => {
-          const match = String(value || "").match(/\d+/);
-          return match ? Number(match[0]) : null;
-        };
+async function snapshotSuperUCartCount(page, extraSignals = []) {
+  const signals = uniqueTexts([
+    ...extraSignals,
+    ...SUPERU_CART_SIGNALS
+  ]);
 
-        let max = 0;
-        for (const selector of selectors) {
-          const nodes = Array.from(document.querySelectorAll(selector));
-          for (const node of nodes) {
-            const fromText = readNumber(node.textContent);
-            const fromAria = readNumber(node.getAttribute("aria-label"));
-            const current = Number.isFinite(fromText) ? fromText : fromAria;
-            if (Number.isFinite(current) && current > max) {
-              max = current;
-            }
+  try {
+    return await page.evaluate((selectors) => {
+      const readNumber = (value) => {
+        const match = String(value || "").match(/\d+/);
+        return match ? Number(match[0]) : null;
+      };
+
+      let max = 0;
+      for (const selector of selectors) {
+        const nodes = Array.from(document.querySelectorAll(selector));
+        for (const node of nodes) {
+          const fromText = readNumber(node.textContent);
+          const fromAria = readNumber(node.getAttribute("aria-label"));
+          const current = Number.isFinite(fromText) ? fromText : fromAria;
+          if (Number.isFinite(current) && current > max) {
+            max = current;
           }
         }
-
-        return max;
-      }, signals);
-    } catch (_) {
-      return 0;
-    }
-  }
-
-  async function selectSuperUStore(page, city, options = {}) {
-    const safeCity = String(city || "").trim();
-    const timeout = Math.max(6000, Number(options.timeout) || 30000);
-
-    if (!safeCity) {
-      return { success: false, city: safeCity, storeName: null, error: "Ville invalide" };
-    }
-
-    logger.push(`selectSuperUStore:start city=${safeCity}`);
-    console.log(`🛒 Super U: sélection du magasin pour ${safeCity}`);
-
-    const currentUrl = String(page.url() || "").toLowerCase();
-    if (!currentUrl.includes("coursesu.com")) {
-      await page.goto(SUPERU_DRIVE_URL, { waitUntil: "domcontentloaded", timeout });
-      await page.waitForTimeout(1200);
-    }
-
-    // Dismiss overlays
-    await dismissSuperUOverlays(page);
-
-    // Check if store is already selected
-    const alreadySelectedState = await page.evaluate(() => {
-      const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
-      const body = clean(document.body?.innerText || "");
-      const hasCatalogEntry = /faire mes courses|commencer mes courses|mes produits|chercher|recherche|produit/i.test(body);
-      return { hasCatalogEntry };
-    }).catch(() => ({ hasCatalogEntry: false }));
-
-    if (alreadySelectedState.hasCatalogEntry) {
-      logger.push(`selectSuperUStore:already_selected store=${safeCity}`);
-      console.log(`📦 Super U magasin probablement déjà sélectionné`);
-      return { success: true, city: safeCity, storeName: safeCity, error: null };
-    }
-
-    // Open store selection modal if needed
-    const opened = await safeClick(page, SUPERU_STORE_ENTRY_SELECTORS, "entrée choix magasin Super U");
-    if (!opened) {
-      const startSearchInput = await waitAnySelector(page, SUPERU_STORE_SEARCH_SELECTORS, 3000);
-      if (!startSearchInput) {
-        return {
-          success: false,
-          city: safeCity,
-          storeName: null,
-          error: "Ouverture de la sélection magasin Super U impossible"
-        };
-      }
-    }
-
-    await page.waitForTimeout(500);
-
-    // Find and use store search input
-    const storeInputSelector = await waitAnySelector(page, SUPERU_STORE_SEARCH_SELECTORS, Math.min(timeout, 14000));
-    if (!storeInputSelector) {
-      return {
-        success: false,
-        city: safeCity,
-        storeName: null,
-        error: "Champ de recherche magasin Super U introuvable"
-      };
-    }
-
-    try {
-      const inputs = page.locator(storeInputSelector);
-      const count = await inputs.count();
-      let targetInput = null;
-
-      for (let i = 0; i < count; i++) {
-        const candidate = inputs.nth(i);
-        const visible = await candidate.isVisible({ timeout: 200 }).catch(() => false);
-        if (!visible) continue;
-        targetInput = candidate;
-        break;
       }
 
-      if (!targetInput) {
-        return {
-          success: false,
-          city: safeCity,
-          storeName: null,
-          error: "Input magasin détecté mais non visible"
-        };
-      }
-
-      await targetInput.click({ timeout: 5000 });
-      await targetInput.fill("");
-      await targetInput.type(safeCity, { delay: 60 });
-      await page.waitForTimeout(800);
-    } catch (error) {
-      return {
-        success: false,
-        city: safeCity,
-        storeName: null,
-        error: `Saisie ville échouée: ${error.message}`
-      };
-    }
-
-    // Wait for store options and select first one
-    let storeCardFound = false;
-    const storeDeadline = Date.now() + Math.min(timeout, 20000);
-    while (Date.now() < storeDeadline && !storeCardFound) {
-      for (const selector of SUPERU_STORE_CARD_SELECTORS) {
-        try {
-          const cards = page.locator(selector);
-          const count = await cards.count();
-          if (count > 0) {
-            const firstCard = cards.nth(0);
-            if (await firstCard.isVisible({ timeout: 500 })) {
-              await firstCard.click({ timeout: 5000 });
-              logger.push(`selectSuperUStore:store_card_clicked selector=${selector}`);
-              storeCardFound = true;
+      if (max <= 0) {
+        const body = String(document.body?.innerText || "").toLowerCase().replace(/\s+/g, " ");
+        const patterns = [
+          /(\d{1,3})\s*produit(?:s)?\s*dans\s*le\s*panier/i,
+          /panier\s*[:(\-\s]*(\d{1,3})\b/i,
+          /(\d{1,3})\s*article(?:s)?\s*(?:dans\s+le\s+)?panier/i
+        ];
+        for (const pattern of patterns) {
+          const match = body.match(pattern);
+          if (match && match[1]) {
+            const parsed = Number(match[1]);
+            if (Number.isFinite(parsed) && parsed > 0) {
+              max = parsed;
               break;
             }
           }
-        } catch (_) {
-          // try next selector
         }
       }
 
-      if (!storeCardFound) {
-        await page.waitForTimeout(300);
+      return max;
+    }, signals);
+  } catch (_) {
+    return 0;
+  }
+}
+
+async function selectSuperUStore(page, city, options = {}) {
+  const safeCity = String(city || "").trim();
+  const timeout = Math.max(6000, Number(options.timeout) || 30000);
+
+  if (!safeCity) {
+    return { success: false, city: safeCity, storeName: null, error: "Ville invalide" };
+  }
+
+  logger.push(`selectSuperUStore:start city=${safeCity}`);
+  console.log(`🛒 Super U: sélection du magasin pour ${safeCity}`);
+
+  const currentUrl = String(page.url() || "").toLowerCase();
+  if (!currentUrl.includes("coursesu.com")) {
+    await page.goto(SUPERU_DRIVE_URL, { waitUntil: "domcontentloaded", timeout });
+    await page.waitForTimeout(1200);
+  }
+
+  // Dismiss overlays
+  await dismissSuperUOverlays(page);
+
+  // Check if store is already selected
+  const alreadySelectedState = await page.evaluate(() => {
+    const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
+    const body = clean(document.body?.innerText || "");
+    const hasStoreSignals = /code postal|ville|choisir un magasin|mon magasin|sélection du magasin|selection du magasin/i.test(body);
+    const hasProductSignals = /faire mes courses|commencer mes courses|mes produits|recherche|produit|ajouter au panier|panier/i.test(body);
+    const productCards = Array.from(document.querySelectorAll("[data-testid*='product' i], article[class*='product' i], li[class*='product' i], div[class*='product-card' i], main article, main li, section article, section li")).some((node) => {
+      const rect = node.getBoundingClientRect();
+      if (rect.width <= 2 || rect.height <= 2) return false;
+      const text = clean(node.textContent || node.innerText || "");
+      return /€|ajouter|panier|produit/i.test(text);
+    });
+    return { hasCatalogEntry: productCards && hasProductSignals && !hasStoreSignals };
+  }).catch(() => ({ hasCatalogEntry: false }));
+
+  if (alreadySelectedState.hasCatalogEntry) {
+    logger.push(`selectSuperUStore:already_selected store=${safeCity}`);
+    console.log(`📦 Super U magasin probablement déjà sélectionné`);
+    return { success: true, city: safeCity, storeName: safeCity, error: null };
+  }
+
+  // Open store selection modal if needed
+  const opened = await safeClick(page, SUPERU_STORE_ENTRY_SELECTORS, "entrée choix magasin Super U");
+  if (!opened) {
+    const startSearchInput = await waitAnySelector(page, SUPERU_STORE_SEARCH_SELECTORS, 3000);
+    if (!startSearchInput) {
+      return {
+        success: false,
+        city: safeCity,
+        storeName: null,
+        error: "Ouverture de la sélection magasin Super U impossible"
+      };
+    }
+  }
+
+  await page.waitForTimeout(500);
+
+  // Find and use store search input
+  const storeInputSelector = await waitAnySelector(page, SUPERU_STORE_SEARCH_SELECTORS, Math.min(timeout, 14000));
+  if (!storeInputSelector) {
+    return {
+      success: false,
+      city: safeCity,
+      storeName: null,
+      error: "Champ de recherche magasin Super U introuvable"
+    };
+  }
+
+  try {
+    const inputs = page.locator(storeInputSelector);
+    const count = await inputs.count();
+    let targetInput = null;
+
+    for (let i = 0; i < count; i++) {
+      const candidate = inputs.nth(i);
+      const visible = await candidate.isVisible({ timeout: 200 }).catch(() => false);
+      if (!visible) continue;
+      targetInput = candidate;
+      break;
+    }
+
+    if (!targetInput) {
+      return {
+        success: false,
+        city: safeCity,
+        storeName: null,
+        error: "Input magasin détecté mais non visible"
+      };
+    }
+
+    await targetInput.click({ timeout: 5000 });
+    await targetInput.fill("");
+    await targetInput.type(safeCity, { delay: 60 });
+    await page.waitForTimeout(800);
+  } catch (error) {
+    return {
+      success: false,
+      city: safeCity,
+      storeName: null,
+      error: `Saisie ville échouée: ${error.message}`
+    };
+  }
+
+  // Wait for store options and select first one
+  let storeCardFound = false;
+  const storeDeadline = Date.now() + Math.min(timeout, 20000);
+  while (Date.now() < storeDeadline && !storeCardFound) {
+    for (const selector of SUPERU_STORE_CARD_SELECTORS) {
+      try {
+        const cards = page.locator(selector);
+        const count = await cards.count();
+        if (count > 0) {
+          const firstCard = cards.nth(0);
+          if (await firstCard.isVisible({ timeout: 500 })) {
+            await firstCard.click({ timeout: 5000 });
+            logger.push(`selectSuperUStore:store_card_clicked selector=${selector}`);
+            storeCardFound = true;
+            break;
+          }
+        }
+      } catch (_) {
+        // try next selector
       }
     }
 
     if (!storeCardFound) {
-      return {
-        success: false,
-        city: safeCity,
-        storeName: null,
-        error: "Aucune carte magasin trouvée"
-      };
-    }
-
-    // Click the "Choose store" button
-    const chooseButtonFound = await safeClick(page, SUPERU_STORE_BUTTON_SELECTORS, "bouton choisir magasin");
-    if (!chooseButtonFound) {
-      logger.push(`selectSuperUStore:choose_button_not_found trying_fallback`);
-      await page.waitForTimeout(1000);
-    }
-
-    // Verify store selection
-    const deadline = Date.now() + Math.min(timeout, 10000);
-    while (Date.now() < deadline) {
-      const catalogReady = await page.evaluate(() => {
-        const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
-        const body = clean(document.body?.innerText || "");
-        return /faire mes courses|commencer mes courses|chercher|recherche|produit|course/i.test(body);
-      }).catch(() => false);
-
-      if (catalogReady) {
-        logger.push(`selectSuperUStore:store_selected city=${safeCity}`);
-        console.log(`✅ Super U: magasin sélectionné pour ${safeCity}`);
-        return { success: true, city: safeCity, storeName: safeCity, error: null };
-      }
-
       await page.waitForTimeout(300);
     }
-
-    return { success: true, city: safeCity, storeName: safeCity, error: null };
   }
 
-  async function searchSuperUProduct(page, query, options = {}) {
-    const safeQuery = String(query || "").trim();
-    const timeout = Number(options.timeout) || 20000;
+  if (!storeCardFound) {
+    return {
+      success: false,
+      city: safeCity,
+      storeName: null,
+      error: "Aucune carte magasin trouvée"
+    };
+  }
 
-    if (!safeQuery) {
-      return { success: false, query: safeQuery, selector: null, products: [], error: "Requête produit vide" };
+  // Click the "Choose store" button
+  const chooseButtonFound = await safeClick(page, SUPERU_STORE_BUTTON_SELECTORS, "bouton choisir magasin");
+  if (!chooseButtonFound) {
+    logger.push(`selectSuperUStore:choose_button_not_found trying_fallback`);
+    await page.waitForTimeout(1000);
+  }
+
+  // Verify store selection
+  const deadline = Date.now() + Math.min(timeout, 10000);
+  while (Date.now() < deadline) {
+    const catalogReady = await page.evaluate(() => {
+      const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
+      const body = clean(document.body?.innerText || "");
+      const hasStoreSignals = /code postal|ville|choisir un magasin|mon magasin|sélection du magasin|selection du magasin/i.test(body);
+      const cards = Array.from(document.querySelectorAll("[data-testid*='product' i], article[class*='product' i], li[class*='product' i], div[class*='product-card' i], main article, main li, section article, section li")).filter((node) => {
+        const rect = node.getBoundingClientRect();
+        if (rect.width <= 2 || rect.height <= 2) return false;
+        const text = clean(node.textContent || node.innerText || "");
+        if (!text) return false;
+        if (/ma carte u|découvrir|decouvrir|services|catalogue|magasin|adhérer|adherer|aide|connexion/i.test(text)) return false;
+        return /€|ajouter|panier|produit/i.test(text);
+      });
+      return cards.length > 0 && !hasStoreSignals;
+    }).catch(() => false);
+
+    if (catalogReady) {
+      logger.push(`selectSuperUStore:store_selected city=${safeCity}`);
+      console.log(`✅ Super U: magasin sélectionné pour ${safeCity}`);
+      return { success: true, city: safeCity, storeName: safeCity, error: null };
     }
 
-    logger.push(`searchSuperUProduct:start query=${safeQuery}`);
-    console.log(`🔍 Super U: recherche de "${safeQuery}"`);
+    await page.waitForTimeout(300);
+  }
 
-    const inputSelector = await waitAnySelector(page, SUPERU_SEARCH_INPUT_SELECTORS, Math.min(timeout, 12000));
-    if (!inputSelector) {
+  return { success: true, city: safeCity, storeName: safeCity, error: null };
+}
+
+async function searchSuperUProduct(page, query, options = {}) {
+  const safeQuery = String(query || "").trim();
+  const timeout = Number(options.timeout) || 20000;
+
+  if (!safeQuery) {
+    return { success: false, query: safeQuery, selector: null, products: [], error: "Requête produit vide" };
+  }
+
+  const storeModalVisible = await page.evaluate(() => {
+    const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
+    const body = clean(document.body?.innerText || "");
+    const storeInputs = Array.from(document.querySelectorAll("input[type='search'], input[type='text'], input[name='city'], input[name='store'], input[placeholder*='ville' i], input[placeholder*='code postal' i], input[aria-label*='magasin' i]")).filter((node) => {
+      const rect = node.getBoundingClientRect();
+      if (rect.width <= 2 || rect.height <= 2) return false;
+      const haystack = `${clean(node.getAttribute("placeholder"))} ${clean(node.getAttribute("aria-label"))} ${clean(node.getAttribute("name"))} ${clean(node.id)}`.toLowerCase();
+      return /ville|code postal|magasin|choisir/.test(haystack);
+    });
+    const hasStoreSelectionSignals = /choisir un magasin|choisir mon magasin|sélection du magasin|selection du magasin|code postal|ville|magasin/.test(body);
+    const hasProductSignals = /ajouter au panier|panier|produit|résultat|resultat|recherche produit/.test(body);
+    return storeInputs.length > 0 && hasStoreSelectionSignals && !hasProductSignals;
+  }).catch(() => false);
+
+  if (storeModalVisible) {
+    return {
+      success: false,
+      query: safeQuery,
+      selector: null,
+      products: [],
+      error: "Magasin Super U non sélectionné: la barre de recherche magasin est encore visible"
+    };
+  }
+
+  const inputSelector = await waitAnySelector(page, SUPERU_SEARCH_INPUT_SELECTORS, Math.min(timeout, 12000));
+  if (!inputSelector) {
+    return {
+      success: false,
+      query: safeQuery,
+      selector: null,
+      products: [],
+      error: "Champ de recherche produit introuvable"
+    };
+  }
+
+  try {
+    const inputs = page.locator(inputSelector);
+    const count = await inputs.count();
+    let targetInput = null;
+
+    for (let i = 0; i < count; i++) {
+      const candidate = inputs.nth(i);
+      const visible = await candidate.isVisible({ timeout: 200 }).catch(() => false);
+      if (!visible) continue;
+      targetInput = candidate;
+      break;
+    }
+
+    if (!targetInput) {
       return {
         success: false,
         query: safeQuery,
-        selector: null,
+        selector: inputSelector,
         products: [],
-        error: "Champ de recherche produit introuvable"
+        error: "Champ de recherche trouvé mais bloqué"
       };
     }
 
+    await dismissSuperUOverlays(page);
+    await dismissBlockingOverlays(page);
     try {
-      const inputs = page.locator(inputSelector);
-      const count = await inputs.count();
-      let targetInput = null;
-
-      for (let i = 0; i < count; i++) {
-        const candidate = inputs.nth(i);
-        const visible = await candidate.isVisible({ timeout: 200 }).catch(() => false);
-        if (!visible) continue;
-        targetInput = candidate;
-        break;
-      }
-
-      if (!targetInput) {
-        return {
-          success: false,
-          query: safeQuery,
-          selector: inputSelector,
-          products: [],
-          error: "Champ de recherche trouvé mais bloqué"
-        };
-      }
-
       await targetInput.click({ timeout: 5000 });
-      await targetInput.fill("");
-      await targetInput.type(safeQuery, { delay: 40 });
-      try {
-        await page.keyboard.press("Enter");
-      } catch (_) {
-        const submitSelector = await waitAnySelector(page, SUPERU_SEARCH_SUBMIT_SELECTORS, 2000);
-        if (submitSelector) {
-          await page.click(submitSelector, { timeout: 3000 });
-        }
+    } catch (_) {
+      await dismissSuperUOverlays(page);
+      await dismissBlockingOverlays(page);
+      await targetInput.click({ timeout: 5000, force: true });
+    }
+    await targetInput.fill("");
+    await targetInput.type(safeQuery, { delay: 40 });
+    try {
+      await page.keyboard.press("Enter");
+    } catch (_) {
+      const submitSelector = await waitAnySelector(page, SUPERU_SEARCH_SUBMIT_SELECTORS, 2000);
+      if (submitSelector) {
+        await page.click(submitSelector, { timeout: 3000 });
       }
-    } catch (err) {
+    }
+  } catch (err) {
+    return {
+      success: false,
+      query: safeQuery,
+      selector: inputSelector,
+      products: [],
+      error: `Saisie recherche échouée: ${err.message}`
+    };
+  }
+
+  await waitAnySelector(page, SUPERU_PRODUCT_CARD_SELECTORS, Math.min(timeout, 10000)).catch(() => null);
+
+  const products = await page.evaluate(() => {
+    const cards = Array.from(document.querySelectorAll(".search-result-items > li, .grid-tile, .product-tile, [data-testid*='product' i], article[class*='product' i], li[class*='product' i], div[class*='product-card' i], main article, main li, [class*='card' i]")).slice(0, 40);
+    return cards.map((card, idx) => {
+      const text = (card.textContent || "").replace(/\s+/g, " ").trim();
+      const splitPriceMatch = text.match(/(\d{1,4})\s*€\s*[,.]?\s*(\d{2})\b/i);
+      const priceMatch = text.match(/(\d{1,4}(?:[.,]\d{1,2})?)\s*€/i);
+      const name = (
+        card.querySelector(".name-link, [class*='name-link' i], [class*='product-name' i], .product-image-content")?.textContent
+        || text.split(/\d{1,4}(?:[.,]\d{1,2})\s*€/i)[0]
+      ).replace(/^[\s\d•\-]*/, "").slice(0, 140).trim();
+      const detailHref = card.querySelector("a.product-tile-link, a[href*='/p/' i], a[href*='produit' i], a[href*='product' i], a[href*='fiche' i], a[href*='detail' i], a[href]")?.href || null;
+      const unavailable = /indisponible|rupture|non disponible/i.test(text);
+      const isGenericNavigation = /mon compte|ma carte u|découvrir|decouvrir|services|catalogue|magasin|adhérer|adherer|aide/i.test(text);
+      const hasProductSignal = Boolean(detailHref)
+        || Boolean(card.querySelector("button, [role='button'], .product-button__bag, .product-button"))
+        || /ajouter|panier|produit/i.test(text)
+        || /\b\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|cl)\b/i.test(text);
       return {
-        success: false,
-        query: safeQuery,
-        selector: inputSelector,
-        products: [],
-        error: `Saisie recherche échouée: ${err.message}`
+        index: idx + 1,
+        name: name || `Produit ${idx + 1}`,
+        price: splitPriceMatch
+          ? Number(`${splitPriceMatch[1]}.${splitPriceMatch[2]}`)
+          : (priceMatch ? Number(String(priceMatch[1]).replace(",", ".")) : null),
+        available: !unavailable,
+        isGenericNavigation,
+        hasProductSignal,
+        id: card.getAttribute("data-product-id")
+          || card.getAttribute("data-testid")
+          || card.getAttribute("data-id")
+          || card.getAttribute("id")
+          || (detailHref ? detailHref.split(/[?#]/)[0] : null)
+          || `card-${idx + 1}`
       };
-    }
+    }).filter((p, index) => {
+      if (!p.name) return false;
+      if (/ajouter|panier|promotions?|mon compte|mes favoris|aide|connexion|carte u|découvrir|decouvrir/i.test(p.name)) return false;
+      if (p.isGenericNavigation) return false;
+      return (p.price !== null || p.available) && p.hasProductSignal;
+    });
+  }).catch(() => []);
 
-    await waitAnySelector(page, SUPERU_PRODUCT_CARD_SELECTORS, Math.min(timeout, 10000)).catch(() => null);
-
-    const products = await page.evaluate(() => {
-      const cards = Array.from(document.querySelectorAll("[data-testid*='product' i], article[class*='product' i], li[class*='product' i], div[class*='product-card' i]")).slice(0, 24);
-      return cards.map((card, idx) => {
-        const text = (card.textContent || "").replace(/\s+/g, " ").trim();
-        const splitPriceMatch = text.match(/(\d{1,4})\s*€\s*[,.]?\s*(\d{2})\b/i);
-        const priceMatch = text.match(/(\d{1,4}(?:[.,]\d{1,2})?)\s*€/i);
-        const name = text.split(/\d{1,4}(?:[.,]\d{1,2})\s*€/i)[0].replace(/^[\s\d•\-]*/, "").slice(0, 140);
-        const unavailable = /indisponible|rupture|non disponible/i.test(text);
-        return {
-          index: idx + 1,
-          name: name || `Produit ${idx + 1}`,
-          price: splitPriceMatch
-            ? Number(`${splitPriceMatch[1]}.${splitPriceMatch[2]}`)
-            : (priceMatch ? Number(String(priceMatch[1]).replace(",", ".")) : null),
-          available: !unavailable,
-          id: card.getAttribute("data-product-id")
-            || card.getAttribute("data-testid")
-            || card.getAttribute("data-id")
-            || card.getAttribute("id")
-            || `card-${idx + 1}`
-        };
-      }).filter((p) => p.name && (p.price !== null || p.available));
-    }).catch(() => []);
-
-    if (!products.length) {
-      return {
-        success: false,
-        query: safeQuery,
-        selector: inputSelector,
-        products,
-        error: "Aucune carte produit exploitable extraite"
-      };
-    }
-
-    for (const product of products.slice(0, 3)) {
-      console.log(`🔍 Produit trouvé: ${product.name}${product.price ? ` (${product.price}€)` : ""}`);
-    }
-    logger.push(`searchSuperUProduct:found count=${products.length}`);
-
+  if (!products.length) {
+    logger.push(`searchSuperUProduct:warning results_not_confirmed query=${safeQuery}`);
     return {
       success: true,
       query: safeQuery,
       selector: inputSelector,
       products,
-      error: null
+      error: null,
+      warning: "Aucune carte produit exploitable extraite"
     };
   }
 
-  async function extractSuperUProductList(page, options = {}) {
-    const limit = Math.max(1, Number(options.limit) || 20);
-    const timeout = Math.max(3000, Number(options.timeout) || 15000);
-    const extraCardSelectors = Array.isArray(options.extraCardSelectors) ? options.extraCardSelectors : [];
+  for (const product of products.slice(0, 3)) {
+    console.log(`🔍 Produit trouvé: ${product.name}${product.price ? ` (${product.price}€)` : ""}`);
+  }
+  logger.push(`searchSuperUProduct:found count=${products.length}`);
 
-    console.log("📄 Super U: extraction liste produits");
-    logger.push(`extractSuperUProductList:start limit=${limit}`);
+  return {
+    success: true,
+    query: safeQuery,
+    selector: inputSelector,
+    products,
+    error: null
+  };
+}
 
-    const selectors = uniqueTexts([...extraCardSelectors, ...SUPERU_PRODUCT_CARD_SELECTORS]);
+async function extractSuperUProductList(page, options = {}) {
+  const limit = Math.max(1, Number(options.limit) || 20);
+  const timeout = Math.max(3000, Number(options.timeout) || 15000);
+  const extraCardSelectors = Array.isArray(options.extraCardSelectors) ? options.extraCardSelectors : [];
 
-    let readySelector = null;
-    const deadline = Date.now() + timeout;
+  console.log("📄 Super U: extraction liste produits");
+  logger.push(`extractSuperUProductList:start limit=${limit}`);
 
-    while (Date.now() < deadline && !readySelector) {
-      for (const selector of selectors) {
-        try {
-          const loc = page.locator(selector).first();
-          if (await loc.count() > 0 && await loc.isVisible({ timeout: 250 })) {
-            readySelector = selector;
-            break;
-          }
-        } catch (_) {
-          // keep trying
+  await dismissSuperUOverlays(page);
+  await dismissBlockingOverlays(page);
+
+  const selectors = uniqueTexts([...extraCardSelectors, ...SUPERU_PRODUCT_CARD_SELECTORS]);
+
+  let readySelector = null;
+  const deadline = Date.now() + timeout;
+
+  while (Date.now() < deadline && !readySelector) {
+    for (const selector of selectors) {
+      try {
+        const loc = page.locator(selector).first();
+        if (await loc.count() > 0 && await loc.isVisible({ timeout: 250 })) {
+          readySelector = selector;
+          break;
         }
-      }
-
-      if (!readySelector) {
-        await page.waitForTimeout(300);
+      } catch (_) {
+        // keep trying
       }
     }
 
-    const extracted = await page.evaluate(({ cardSelectors, maxItems }) => {
-      const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
-
-      const parsePrice = (value) => {
-        const source = clean(value);
-        const splitMatch = source.match(/(\d{1,4})\s*€\s*[,.]?\s*(\d{2})\b/i);
-        if (splitMatch) {
-          const parsed = Number(`${splitMatch[1]}.${splitMatch[2]}`);
-          return Number.isFinite(parsed) ? parsed : null;
-        }
-        const match = source.match(/(\d{1,4}(?:[.,]\d{1,2})?)\s*€/i) || source.match(/€\s*(\d{1,4}(?:[.,]\d{1,2})?)/i);
-        if (!match) return null;
-        const parsed = Number(String(match[1]).replace(",", "."));
-        return Number.isFinite(parsed) ? parsed : null;
-      };
-
-      const parseUnitPrice = (value) => {
-        const source = clean(value);
-        const splitMatch = source.match(/(\d{1,4})\s*€\s*[,.]?\s*(\d{1,4})\s*\/\s*(kg|kilo|l|litre|ml|cl)/i);
-        if (splitMatch) {
-          const parsed = Number(`${splitMatch[1]}.${splitMatch[2]}`);
-          return Number.isFinite(parsed) ? parsed : null;
-        }
-        const match = source.match(/(\d{1,4}(?:[.,]\d{1,4})?)\s*€\s*\/\s*(kg|kilo|l|litre|ml|cl)/i);
-        if (!match) return null;
-        const parsed = Number(String(match[1]).replace(",", "."));
-        return Number.isFinite(parsed) ? parsed : null;
-      };
-
-      const parseFormat = (value) => {
-        const source = clean(value);
-        const match = source.match(/\b(\d+\s*[x×]\s*\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|cl)|\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|cl))\b/i);
-        return match ? clean(match[1]).replace(/\s+/g, "") : null;
-      };
-
-      const nodes = [];
-      const seen = new Set();
-      for (const selector of cardSelectors) {
-        try {
-          const list = Array.from(document.querySelectorAll(selector));
-          for (const node of list) {
-            if (!(node instanceof HTMLElement)) continue;
-            if (seen.has(node)) continue;
-            seen.add(node);
-            nodes.push(node);
-          }
-        } catch (_) {
-          // ignore
-        }
-      }
-
-      const visibleCards = nodes.filter((node) => {
-        const rect = node.getBoundingClientRect();
-        if (rect.width <= 2 || rect.height <= 2) return false;
-        const text = clean(node.innerText || node.textContent);
-        if (!text) return false;
-        const hasPrice = /(\d{1,4}(?:[.,]\d{1,2})?)\s*€/i.test(text);
-        return hasPrice;
-      }).slice(0, Math.max(maxItems * 3, 30));
-
-      const products = [];
-      const uniqueByName = new Set();
-
-      for (const card of visibleCards) {
-        const text = clean(card.innerText || card.textContent);
-        if (!text) continue;
-
-        const beforePrice = text.split(/\d{1,4}(?:[.,]\d{1,2})\s*€/i)[0] || "";
-        const name = clean(beforePrice).slice(0, 160) || "Produit inconnu";
-
-        if (uniqueByName.has(name.toLowerCase())) continue;
-        uniqueByName.add(name.toLowerCase());
-
-        const price = parsePrice(text);
-        if (!price || price <= 0) continue;
-
-        const pricePerUnit = parseUnitPrice(text);
-        const promoText = text.match(/(?:promo|promotion|offre|\-\d+\s*%|\d+\s*%\s*offert)/i)?.[0] || null;
-        const availability = /indisponible|rupture|non disponible/i.test(text) ? "indisponible" : "disponible";
-        const format = parseFormat(name || text);
-
-        const imgNode = card.querySelector("img, source[srcset]");
-        let imageUrl = null;
-        if (imgNode) {
-          imageUrl = imgNode.currentSrc || imgNode.getAttribute("src") || imgNode.getAttribute("data-src") || null;
-        }
-
-        products.push({
-          name,
-          unitPrice: price,
-          pricePerUnit,
-          availability,
-          promo: promoText,
-          formatQuantity: format,
-          internalId: card.getAttribute("data-product-id") || card.getAttribute("data-id") || `prod-${products.length + 1}`,
-          productUrl: card.querySelector("a")?.href || null,
-          imageUrl,
-          category: null
-        });
-      }
-
-      return products.slice(0, maxItems);
-    }, { cardSelectors: selectors, maxItems: limit }).catch(() => []);
-
-    const normalized = extracted.map((product, index) => {
-      const result = {
-        name: product.name || `Produit ${index + 1}`,
-        price: Number.isFinite(product.unitPrice) ? Number(product.unitPrice) : null,
-        pricePerKg: Number.isFinite(product.pricePerUnit) ? Number(product.pricePerUnit) : null,
-        availability: product.availability || "inconnue",
-        promo: product.promo || null,
-        quantity: product.formatQuantity || null,
-        id: product.internalId || `fallback-${index + 1}`,
-        url: product.productUrl || null,
-        image: product.imageUrl || null
-      };
-
-      if (result.price !== null) {
-        console.log(`💰 Prix détecté: ${result.name} -> ${result.price}€`);
-      }
-      if (result.promo) {
-        console.log(`🏷️ Promo détectée: ${result.name} -> ${result.promo}`);
-      }
-
-      return result;
-    });
-
-    logger.push(`extractSuperUProductList:success count=${normalized.length}`);
-    return normalized;
+    if (!readySelector) {
+      await page.waitForTimeout(300);
+    }
   }
 
-  async function addSuperUToCart(page, index = 1, options = {}) {
-    const timeout = Number(options.timeout) || 15000;
-    const targetIndex = Math.max(1, Number(index) || 1);
-    logger.push(`addSuperUToCart:start index=${targetIndex}`);
+  const extracted = await page.evaluate(({ cardSelectors, maxItems }) => {
+    const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
 
-    const beforeCount = await snapshotSuperUCartCount(page);
+    const parsePrice = (value) => {
+      const source = clean(value);
+      const splitMatch = source.match(/(\d{1,4})\s*€\s*[,.]?\s*(\d{2})\b/i);
+      if (splitMatch) {
+        const parsed = Number(`${splitMatch[1]}.${splitMatch[2]}`);
+        return Number.isFinite(parsed) ? parsed : null;
+      }
+      const match = source.match(/(\d{1,4}(?:[.,]\d{1,2})?)\s*€/i) || source.match(/€\s*(\d{1,4}(?:[.,]\d{1,2})?)/i);
+      if (!match) return null;
+      const parsed = Number(String(match[1]).replace(",", "."));
+      return Number.isFinite(parsed) ? parsed : null;
+    };
 
-    const addSelector = await waitAnySelector(page, SUPERU_ADD_TO_CART_SELECTORS, timeout);
+    const parseUnitPrice = (value) => {
+      const source = clean(value);
+      const splitMatch = source.match(/(\d{1,4})\s*€\s*[,.]?\s*(\d{1,4})\s*\/\s*(kg|kilo|l|litre|ml|cl)/i);
+      if (splitMatch) {
+        const parsed = Number(`${splitMatch[1]}.${splitMatch[2]}`);
+        return Number.isFinite(parsed) ? parsed : null;
+      }
+      const match = source.match(/(\d{1,4}(?:[.,]\d{1,4})?)\s*€\s*\/\s*(kg|kilo|l|litre|ml|cl)/i);
+      if (!match) return null;
+      const parsed = Number(String(match[1]).replace(",", "."));
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const parseFormat = (value) => {
+      const source = clean(value);
+      const match = source.match(/\b(\d+\s*[x×]\s*\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|cl)|\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|cl))\b/i);
+      return match ? clean(match[1]).replace(/\s+/g, "") : null;
+    };
+
+    const nodes = [];
+    const seen = new Set();
+    for (const selector of cardSelectors) {
+      try {
+        const list = Array.from(document.querySelectorAll(selector));
+        for (const node of list) {
+          if (!(node instanceof HTMLElement)) continue;
+          if (seen.has(node)) continue;
+          seen.add(node);
+          nodes.push(node);
+        }
+      } catch (_) {
+        // ignore
+      }
+    }
+
+    const visibleCards = nodes.filter((node) => {
+      const rect = node.getBoundingClientRect();
+      if (rect.width <= 2 || rect.height <= 2) return false;
+      const text = clean(node.innerText || node.textContent);
+      if (!text) return false;
+      const hasPrice = /(\d{1,4}(?:[.,]\d{1,2})?)\s*€/i.test(text);
+      const hasProductLink = Boolean(node.querySelector("a.product-tile-link, a[href*='/p/' i], a[href*='produit' i], a[href*='product' i], a[href*='fiche' i], a[href*='detail' i], a[href]"));
+      const hasAddButton = Boolean(node.querySelector("button[aria-label*='ajouter' i], button[aria-label*='panier' i], .product-button__bag, .product-button, [class*='bag' i], [class*='add' i]"));
+      const hasFormat = /\b\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|cl)\b/i.test(text);
+      const isGenericNavigation = /mon compte|ma carte u|découvrir|decouvrir|services|catalogue|magasin|adhérer|adherer|aide/i.test(text);
+      return hasPrice && !isGenericNavigation && (hasProductLink || hasAddButton || hasFormat);
+    }).slice(0, Math.max(maxItems * 3, 30));
+
+    const looseCards = visibleCards.length > 0 ? visibleCards : nodes.filter((node) => {
+      const rect = node.getBoundingClientRect();
+      if (rect.width <= 2 || rect.height <= 2) return false;
+      const text = clean(node.innerText || node.textContent);
+      if (!text) return false;
+      const hasPrice = /(\d{1,4}(?:[.,]\d{1,2})?)\s*€/i.test(text);
+      if (!hasPrice) return false;
+      return !/mon compte|ma carte u|découvrir|decouvrir|services|catalogue|magasin|adhérer|adherer|aide/i.test(text);
+    }).slice(0, Math.max(maxItems * 3, 30));
+
+    const products = [];
+    const uniqueByName = new Set();
+
+    for (const card of looseCards) {
+      const text = clean(card.innerText || card.textContent);
+      if (!text) continue;
+
+      const beforePrice = text.split(/\d{1,4}(?:[.,]\d{1,2})\s*€/i)[0] || "";
+      const explicitName = clean(card.querySelector(".name-link, [class*='name-link' i], [class*='product-name' i], .product-image-content")?.textContent || "");
+      const name = (explicitName || clean(beforePrice)).slice(0, 160) || "Produit inconnu";
+      if (/ajouter|panier|mon compte|aide|connexion|catégories?|categories?|carte u|découvrir|decouvrir/i.test(name)) continue;
+
+      if (uniqueByName.has(name.toLowerCase())) continue;
+      uniqueByName.add(name.toLowerCase());
+
+      const price = parsePrice(text);
+      if (!price || price <= 0) continue;
+
+      const pricePerUnit = parseUnitPrice(text);
+      const promoText = text.match(/(?:promo|promotion|offre|\-\d+\s*%|\d+\s*%\s*offert)/i)?.[0] || null;
+      const availability = /indisponible|rupture|non disponible/i.test(text) ? "indisponible" : "disponible";
+      const format = parseFormat(name || text);
+      const detailLink = card.querySelector("a.product-tile-link, a[href*='/p/' i], a[href*='produit' i], a[href*='product' i], a[href*='fiche' i], a[href*='detail' i], a[href]")?.href || null;
+
+      const imgNode = card.querySelector("img, source[srcset]");
+      let imageUrl = null;
+      if (imgNode) {
+        imageUrl = imgNode.currentSrc || imgNode.getAttribute("src") || imgNode.getAttribute("data-src") || null;
+      }
+
+      products.push({
+        name,
+        unitPrice: price,
+        pricePerUnit,
+        availability,
+        promo: promoText,
+        formatQuantity: format,
+        internalId: card.getAttribute("data-product-id") || card.getAttribute("data-id") || (detailLink ? detailLink.split(/[?#]/)[0] : null) || `prod-${products.length + 1}`,
+        productUrl: detailLink,
+        imageUrl,
+        category: null
+      });
+    }
+
+    return products.slice(0, maxItems);
+  }, { cardSelectors: selectors, maxItems: limit }).catch(() => []);
+
+  const normalized = extracted.map((product, index) => {
+    const result = {
+      name: product.name || `Produit ${index + 1}`,
+      price: Number.isFinite(product.unitPrice) ? Number(product.unitPrice) : null,
+      pricePerKg: Number.isFinite(product.pricePerUnit) ? Number(product.pricePerUnit) : null,
+      availability: product.availability || "inconnue",
+      promo: product.promo || null,
+      quantity: product.formatQuantity || null,
+      id: product.internalId || `fallback-${index + 1}`,
+      url: product.productUrl || null,
+      image: product.imageUrl || null
+    };
+
+    if (result.price !== null) {
+      console.log(`💰 Prix détecté: ${result.name} -> ${result.price}€`);
+    }
+    if (result.promo) {
+      console.log(`🏷️ Promo détectée: ${result.name} -> ${result.promo}`);
+    }
+
+    return result;
+  });
+
+  logger.push(`extractSuperUProductList:success count=${normalized.length}`);
+  return normalized;
+}
+
+async function extractSuperUProductDetails(page, options = {}) {
+  return extractProductDetails(page, options);
+}
+
+async function addSuperUToCart(page, index = 1, options = {}) {
+  const timeout = Number(options.timeout) || 15000;
+  const targetIndex = Math.max(1, Number(index) || 1);
+  const targetName = String(options.productName || "").trim();
+  let addSelector = null;
+  let nameTargetClicked = false;
+  logger.push(`addSuperUToCart:start index=${targetIndex}`);
+
+  const beforeCount = await snapshotSuperUCartCount(page);
+
+  if (targetName) {
+    try {
+      const normalize = (value) => String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+      const tokens = normalize(targetName).split(" ").filter((word) => word.length >= 4).slice(0, 4);
+      if (tokens.length > 0) {
+        const bagLoc = page.locator(".product-button__bag[aria-label]");
+        const count = await bagLoc.count();
+        for (let i = 0; i < count; i++) {
+          const candidate = bagLoc.nth(i);
+          const visible = await candidate.isVisible({ timeout: 120 }).catch(() => false);
+          if (!visible) continue;
+          const aria = String(await candidate.getAttribute("aria-label") || "");
+          const normalizedAria = normalize(aria);
+          const matched = tokens.filter((token) => normalizedAria.includes(token)).length;
+          if (matched >= Math.min(2, tokens.length)) {
+            await candidate.click({ timeout: 4000, force: true });
+            nameTargetClicked = true;
+            logger.push(`addSuperUToCart:clicked_by_name matches=${matched}`);
+            break;
+          }
+        }
+      }
+    } catch (_) {
+      // fallback paths below remain active
+    }
+  }
+
+  const targetedClick = nameTargetClicked ? { clicked: true, reason: "name_target" } : await page.evaluate((wantedIndex) => {
+    const dispatch = (node) => {
+      if (!node) return false;
+      try {
+        node.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
+        node.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+        node.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+        node.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+        if (typeof node.click === "function") node.click();
+        return true;
+      } catch (_) {
+        return false;
+      }
+    };
+
+    const cards = Array.from(document.querySelectorAll(".search-result-items > li, .grid-tile, .product-tile"));
+    const validCards = cards.filter((card) => {
+      const text = String(card.textContent || "").toLowerCase().replace(/\s+/g, " ");
+      if (!/\d{1,4}(?:[.,]\d{1,2})?\s*€/.test(text)) return false;
+      if (/mon compte|carte u|découvrir|decouvrir|services|catalogue|magasin|adhérer|adherer|aide/.test(text)) return false;
+      return /ajouter|panier|p[âa]tes|product/.test(text);
+    });
+
+    const card = validCards[Math.min(Math.max(wantedIndex - 1, 0), Math.max(validCards.length - 1, 0))] || null;
+    if (!card) {
+      return { clicked: false, reason: "no_card" };
+    }
+
+    const preferred = card.querySelector(".product-button__bag, .product-button button, [class*='icon-bag' i], button[aria-label*='ajouter' i], button[aria-label*='panier' i], button");
+    const clicked = dispatch(preferred || card);
+    return { clicked, reason: clicked ? "card_button" : "dispatch_failed" };
+  }, targetIndex).catch(() => ({ clicked: false, reason: "evaluate_failed" }));
+
+  if (!targetedClick.clicked) {
+    addSelector = await waitAnySelector(page, SUPERU_ADD_TO_CART_SELECTORS, timeout);
     if (!addSelector) {
       return { success: false, selector: null, error: "Bouton Ajouter au panier introuvable" };
     }
@@ -6228,79 +7203,265 @@ async function addIntermarcheToCart(page, index = 1, options = {}) {
       }
 
       await targetButton.click({ timeout: 5000 });
-      console.log(`🛒 Super U: ajout au panier`);
       logger.push(`addSuperUToCart:clicked selector=${addSelector}`);
     } catch (err) {
       return { success: false, selector: addSelector, error: `Clic ajout panier échoué: ${err.message}` };
     }
+  }
 
-    // Handle quantity/format prompts if they appear
-    const quantityFallbacks = [
-      "button:has-text('Continuer')",
-      "button:has-text('Valider')",
-      "button:has-text('Confirmer')",
-      "button:has-text('OK')",
-      "button:has-text('Ajouter')"
-    ];
+  console.log("🛒 Super U: ajout au panier");
+  logger.push(`addSuperUToCart:targeted=${targetedClick.clicked}`);
 
-    for (const sel of quantityFallbacks) {
-      try {
-        const btn = page.locator(sel).first();
-        if (await btn.count() > 0 && await btn.isVisible({ timeout: 250 })) {
-          await btn.click({ timeout: 1500 });
-          break;
-        }
-      } catch (_) {
-        // ignore optional prompt
+  // Handle quantity/format prompts if they appear
+  const quantityFallbacks = [
+    "button:has-text('Continuer')",
+    "button:has-text('Valider')",
+    "button:has-text('Confirmer')",
+    "button:has-text('OK')",
+    "button:has-text('Ajouter')"
+  ];
+
+  for (const sel of quantityFallbacks) {
+    try {
+      const btn = page.locator(sel).first();
+      if (await btn.count() > 0 && await btn.isVisible({ timeout: 250 })) {
+        await btn.click({ timeout: 1500 });
+        break;
       }
+    } catch (_) {
+      // ignore optional prompt
+    }
+  }
+
+  let updated = false;
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const afterCount = await snapshotSuperUCartCount(page);
+    if (afterCount > beforeCount) {
+      updated = true;
+      break;
     }
 
-    let updated = false;
-    const deadline = Date.now() + timeout;
-    while (Date.now() < deadline) {
-      const afterCount = await snapshotSuperUCartCount(page);
-      if (afterCount > beforeCount) {
+    try {
+      const hasToast = await page.evaluate(() => {
+        const body = (document.body?.innerText || "").toLowerCase();
+        const quantitySignals = Array.from(document.querySelectorAll("button, a, div, span")).some((node) => {
+          const text = String(node.textContent || node.getAttribute("aria-label") || "").toLowerCase().replace(/\s+/g, " ");
+          return /retirer|supprimer|quantit[eé]|\+\s*1|\-\s*1|vider le panier/.test(text);
+        });
+
+        return body.includes("ajouté au panier")
+          || body.includes("article ajouté")
+          || body.includes("panier mis à jour")
+          || body.includes("commander")
+          || body.includes("produits dans le panier")
+          || quantitySignals;
+      });
+      if (hasToast) {
         updated = true;
         break;
       }
+    } catch (_) {
+      // keep polling
+    }
+
+    await page.waitForTimeout(300);
+  }
+
+  if (!updated) {
+    const loginModalVisible = await page.evaluate(() => {
+      const text = String(document.body?.innerText || "").toLowerCase().replace(/\s+/g, " ");
+      return /se connecter|identifiez-vous|connexion/.test(text);
+    }).catch(() => false);
+
+    if (loginModalVisible) {
+      await safeClick(page, [
+        "button[aria-label*='fermer la fenêtre modale' i]",
+        "button[aria-label*='fermer' i]",
+        "button:has-text('Fermer')"
+      ], "fermeture modale connexion Super U");
+      await page.waitForTimeout(700);
 
       try {
-        const hasToast = await page.evaluate(() => {
-          const body = (document.body?.innerText || "").toLowerCase();
-          return body.includes("ajouté au panier")
-            || body.includes("article ajouté")
-            || body.includes("panier mis à jour")
-            || body.includes("commander");
-        });
-        if (hasToast) {
-          updated = true;
-          break;
+        const bagByName = page.locator(".product-button__bag[aria-label]");
+        const total = await bagByName.count();
+        const normalize = (value) => String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+        const tokens = normalize(targetName).split(" ").filter((word) => word.length >= 4).slice(0, 4);
+
+        for (let i = 0; i < total; i++) {
+          const candidate = bagByName.nth(i);
+          const aria = String(await candidate.getAttribute("aria-label") || "");
+          const score = tokens.length ? tokens.filter((token) => normalize(aria).includes(token)).length : 0;
+          if (tokens.length === 0 || score >= Math.min(2, tokens.length)) {
+            await candidate.click({ timeout: 4000, force: true }).catch(() => {});
+            break;
+          }
         }
       } catch (_) {
-        // keep polling
+        // keep default fallback flow
       }
-
-      await page.waitForTimeout(300);
     }
 
-    if (!updated) {
-      return {
-        success: false,
-        selector: addSelector,
-        error: `Panier non mis à jour après ${timeout}ms`
+    // Retry with a card-targeted click in the search grid before failing.
+    await page.evaluate((wantedIndex) => {
+      const dispatch = (node) => {
+        if (!node) return false;
+        try {
+          node.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
+          node.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+          node.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+          node.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+          if (typeof node.click === "function") node.click();
+          return true;
+        } catch (_) {
+          return false;
+        }
       };
+
+      const cards = Array.from(document.querySelectorAll(".search-result-items > li, .grid-tile, .product-tile"));
+      const validCards = cards.filter((card) => {
+        const text = String(card.textContent || "").toLowerCase().replace(/\s+/g, " ");
+        return /\d{1,4}(?:[.,]\d{1,2})?\s*€/.test(text) && /ajouter|panier|product|p[âa]tes/.test(text);
+      });
+
+      const card = validCards[Math.min(Math.max(wantedIndex - 1, 0), Math.max(validCards.length - 1, 0))] || validCards[0] || null;
+      if (!card) return;
+
+      const button = card.querySelector(".product-button__bag, .product-button button, button[aria-label*='ajouter' i], button[aria-label*='panier' i], button");
+      dispatch(button || card);
+    }, targetIndex).catch(() => {});
+
+    await page.waitForTimeout(1200);
+    const afterRetryCount = await snapshotSuperUCartCount(page);
+    if (afterRetryCount > beforeCount) {
+      updated = true;
+    }
+  }
+
+  if (!updated) {
+    // Last real-browser recovery: try neighboring product cards until cart becomes > 0.
+    for (let candidate = 1; candidate <= 6; candidate += 1) {
+      await page.evaluate((wantedIndex) => {
+        const dispatch = (node) => {
+          if (!node) return false;
+          try {
+            node.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
+            node.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+            node.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+            node.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+            if (typeof node.click === "function") node.click();
+            return true;
+          } catch (_) {
+            return false;
+          }
+        };
+
+        const cards = Array.from(document.querySelectorAll(".search-result-items > li, .grid-tile, .product-tile"));
+        const valid = cards.filter((card) => {
+          const text = String(card.textContent || "").toLowerCase().replace(/\s+/g, " ");
+          return /\d{1,4}(?:[.,]\d{1,2})?\s*€/.test(text) && /ajouter|panier|p[âa]tes|product/.test(text);
+        });
+
+        const card = valid[Math.min(Math.max(wantedIndex - 1, 0), Math.max(valid.length - 1, 0))] || null;
+        if (!card) return;
+
+        const addNode = card.querySelector(".product-button__bag, .product-button button, button[aria-label*='ajouter' i], button[aria-label*='panier' i], button");
+        dispatch(addNode || card);
+      }, candidate).catch(() => {});
+
+      await page.waitForTimeout(1200);
+      const probeCount = await snapshotSuperUCartCount(page);
+      if (probeCount > beforeCount) {
+        updated = true;
+        break;
+      }
+    }
+  }
+
+  if (!updated) {
+    return {
+      success: false,
+      selector: addSelector,
+      error: `Panier non mis à jour après ${timeout}ms`
+    };
+  }
+
+  // Final proof in real browser: open cart area and ensure at least one real line item exists.
+  const cartOpened = await safeClick(page, [
+    "a[href*='panier' i]",
+    "button[aria-label*='panier' i]",
+    "[data-testid*='cart' i] a",
+    "[data-testid*='cart' i] button",
+    "[class*='cart' i] a",
+    "[class*='panier' i] a"
+  ], "ouverture panier Super U");
+
+  if (cartOpened) {
+    await page.waitForLoadState("domcontentloaded", { timeout: 6000 }).catch(() => {});
+    await page.waitForTimeout(700);
+  }
+
+  const provenCartCount = await page.evaluate(() => {
+    const readNumber = (value) => {
+      const match = String(value || "").match(/\d+/);
+      return match ? Number(match[0]) : 0;
+    };
+
+    const numberSignals = [
+      "[data-testid*='cart-count' i]",
+      "[data-testid*='basket-count' i]",
+      "[data-testid*='cart' i] [class*='count' i]",
+      "[class*='cart' i] [class*='badge' i]",
+      "[class*='panier' i] [class*='badge' i]"
+    ];
+
+    let max = 0;
+    for (const selector of numberSignals) {
+      for (const node of document.querySelectorAll(selector)) {
+        const fromText = readNumber(node.textContent);
+        const fromAria = readNumber(node.getAttribute("aria-label"));
+        max = Math.max(max, fromText, fromAria);
+      }
     }
 
-    console.log("📦 Super U: panier mis à jour");
-    logger.push("addSuperUToCart:cart_updated");
-    return { success: true, selector: addSelector, error: null };
+    const lineItemSelectors = [
+      "[data-testid*='cart-item' i]",
+      "[data-testid*='basket-item' i]",
+      "[class*='cart-item' i]",
+      "[class*='basket-item' i]",
+      "li[class*='line-item' i]",
+      "[class*='panier' i] li",
+      "[class*='cart' i] li"
+    ];
+
+    let lineItems = 0;
+    for (const selector of lineItemSelectors) {
+      const visible = Array.from(document.querySelectorAll(selector)).filter((node) => {
+        const text = String(node.textContent || "").toLowerCase().replace(/\s+/g, " ");
+        if (!text || text.length < 6) return false;
+        const rect = node.getBoundingClientRect();
+        if (rect.width <= 2 || rect.height <= 2) return false;
+        return /€|retirer|supprimer|quantit[eé]|produit|article|kg|g|ml|cl|l/.test(text);
+      }).length;
+      if (visible > lineItems) {
+        lineItems = visible;
+      }
+    }
+
+    return Math.max(max, lineItems);
+  }).catch(() => 0);
+
+  if (provenCartCount <= 0) {
+    return {
+      success: false,
+      selector: addSelector,
+      error: "Panier Super U non confirmé (aucun article détecté)"
+    };
   }
-  return {
-    success: true,
-    index: targetIndex,
-    selector: addSelector,
-    error: null
-  };
+
+  console.log("📦 Super U: panier mis à jour");
+  logger.push("addSuperUToCart:cart_updated");
+  return { success: true, selector: addSelector, error: null };
 }
 
 export {
@@ -6318,25 +7479,44 @@ export {
   extractProductsFromHtml,
   parsePrice,
   parseQuantity,
+  parseUnit,
+  convertUnits,
   computePricePerKg,
+  computeDerivedPrices,
+  normalizeProduct,
+  filterProducts,
+  sortProductsByStrategy,
+  compareProductsAcrossStores,
+  compareProducts,
   chooseBestProduct,
+  buildFinalCart,
+  buildOptimalCart,
+  selectStore,
   selectLeclercDriveArrow,
   searchProduct,
+  searchLeclercProduct,
+  extractLeclercProductList,
+  extractLeclercProductDetails,
+  addLeclercToCart,
   selectCarrefourStore,
   searchCarrefourProduct,
   extractCarrefourProductList,
+  extractCarrefourProductDetails,
   addCarrefourToCart,
   selectIntermarcheStore,
   searchIntermarcheProduct,
   extractIntermarcheProductList,
+  extractIntermarcheProductDetails,
   addIntermarcheToCart,
   extractProductList,
   extractProductDetails,
   selectProduct,
   addToCart,
-  getDebugLogs
+  getDebugLogs,
   selectSuperUStore,
   searchSuperUProduct,
   extractSuperUProductList,
+  extractSuperUProductDetails,
   addSuperUToCart,
   snapshotSuperUCartCount
+};

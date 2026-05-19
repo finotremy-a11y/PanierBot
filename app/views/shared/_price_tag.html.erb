@@ -1,0 +1,21 @@
+<%# Price tag component %>
+<%# Usage: render "shared/price_tag", price: 1.99, unit: "€/kg", prominent: true %>
+<% price     ||= nil %>
+<% unit      ||= "€" %>
+<% prominent ||= false %>
+
+<% if price.present? && price.to_f > 0 %>
+  <% formatted = number_to_currency(price.to_f, unit: "€", separator: ",", delimiter: " ", precision: 2, format: "%n %u") rescue "#{price} €" %>
+  <% if prominent %>
+    <span class="inline-block rounded-lg bg-indigo-600 px-3 py-1 text-lg font-extrabold text-white shadow-sm shadow-indigo-200">
+      <%= formatted %>
+    </span>
+  <% else %>
+    <span class="font-semibold text-slate-900"><%= formatted %></span>
+    <% if unit != "€" %>
+      <span class="ml-0.5 text-xs text-slate-500"><%= unit %></span>
+    <% end %>
+  <% end %>
+<% else %>
+  <span class="text-sm text-slate-400">—</span>
+<% end %>

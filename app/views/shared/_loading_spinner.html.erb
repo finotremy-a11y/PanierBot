@@ -1,0 +1,11 @@
+<%# Shared loading spinner component %>
+<%# Usage: render "shared/loading_spinner", message: "Chargement…" %>
+<% message ||= "Chargement en cours…" %>
+
+<div class="flex flex-col items-center justify-center gap-4 py-16">
+  <div class="relative">
+    <div class="h-14 w-14 rounded-full border-4 border-indigo-100"></div>
+    <div class="absolute inset-0 h-14 w-14 animate-spin rounded-full border-4 border-transparent border-t-indigo-600"></div>
+  </div>
+  <p class="text-sm font-medium text-slate-600"><%= message %></p>
+</div>

@@ -1,0 +1,167 @@
+<%# Comparisons results page %>
+<% content_for :title, "Résultats — PanierBot" %>
+
+<%# Inject result_id for polling %>
+<% result_id = params[:id] %>
+<% is_processing = @result.is_a?(Hash) && @result[:processing] %>
+<% is_success    = @result.is_a?(Hash) && @result[:success] %>
+<% has_errors    = @result.is_a?(Hash) && Array(@result[:errors]).any? %>
+<% mode          = @result.is_a?(Hash) && @result[:mode] || "multi_store" %>
+<% strategy      = @result.is_a?(Hash) && @result[:strategy] || "cheapest" %>
+<% items         = @result.is_a?(Hash) ? Array(@result[:items]) : [] %>
+<% comparison    = @result.is_a?(Hash) ? (@result[:comparison] || {}).transform_keys(&:to_sym) : {} %>
+<% comp_items    = Array(comparison[:items]).map { |i| i.is_a?(Hash) ? i.transform_keys(&:to_sym) : {} } %>
+<% optimal_cart  = comparison[:optimal_cart] || {} %>
+
+<div class="mx-auto max-w-4xl px-4 py-10 sm:px-6">
+
+  <%# ── Back link ── %>
+  <div class="mb-6">
+    <%= link_to root_path, class: "inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-indigo-600 transition-colors" do %>
+      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+      </svg>
+      Nouvelle comparaison
+    <% end %>
+  </div>
+
+  <%# ── Page header ── %>
+  <div class="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h1 class="text-2xl font-extrabold text-slate-900">Résultats de comparaison</h1>
+        <div class="mt-2 flex flex-wrap gap-2">
+          <% if items.any? %>
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+              📦 <%= items.size %> produit<%= items.size > 1 ? "s" : "" %>
+            </span>
+          <% end %>
+          <span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-600 ring-1 ring-indigo-200">
+            <%= mode == "multi_store" ? "🏪 Multi-enseignes" : "🏪 Mono-enseigne" %>
+          </span>
+          <% strategy_label = { "cheapest" => "💰 Moins cher", "best_per_kg" => "⚖️ €/kg", "per_unit" => "🔢 €/u", "best_per_l" => "🥛 €/L" }[strategy] || strategy %>
+          <span class="rounded-full bg-violet-50 px-3 py-1 text-xs font-medium text-violet-600 ring-1 ring-violet-200">
+            <%= strategy_label %>
+          </span>
+        </div>
+        <% if items.any? %>
+          <p class="mt-3 text-sm text-slate-600">
+            <span class="font-medium">Produits recherchés:</span>
+            <%= items.map(&:capitalize).join(", ") %>
+          </p>
+        <% end %>
+      </div>
+      <%= link_to root_path,
+          class: "inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-indigo-300 transition-all" do %>
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        Relancer
+      <% end %>
+    </div>
+  </div>
+
+  <%# ── Results area (pollable via Turbo) ── %>
+  <div id="comparison-results">
+
+    <% if is_processing %>
+      <%# ── Processing state ── %>
+      <div class="rounded-2xl border border-indigo-200 bg-indigo-50 p-8"
+           data-controller="compare"
+           data-compare-polling-url-value="<%= status_comparison_path(result_id) %>"
+           data-compare-redirect-url-value="<%= comparison_path(result_id) %>"
+           data-compare-auto-poll-value="true">
+        <div class="flex flex-col items-center gap-4 text-center">
+          <%= render "shared/loading_spinner", message: "Analyse des prix en cours…" %>
+          <p class="max-w-sm text-sm text-slate-600">
+            PanierBot visite les drives en temps réel. Selon votre liste,
+            cela peut prendre <strong>1 à 3 minutes</strong>. Ne fermez pas cette page.
+          </p>
+          <div class="mt-2 flex flex-wrap justify-center gap-2 text-xs text-slate-500">
+            <span class="flex items-center gap-1">
+              <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500"></span> Leclerc
+            </span>
+            <span class="flex items-center gap-1">
+              <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" style="animation-delay:0.3s"></span> Carrefour
+            </span>
+            <span class="flex items-center gap-1">
+              <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-orange-500" style="animation-delay:0.6s"></span> Intermarché
+            </span>
+            <span class="flex items-center gap-1">
+              <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" style="animation-delay:0.9s"></span> Super U
+            </span>
+          </div>
+        </div>
+      </div>
+
+    <% elsif has_errors %>
+      <%# ── Error state ── %>
+      <div class="space-y-4">
+        <%= render "shared/error_banner", errors: Array(@result[:errors]) %>
+        <div class="text-center">
+          <%= link_to root_path, class: "inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-indigo-700 transition-colors" do %>
+            Réessayer
+          <% end %>
+        </div>
+      </div>
+
+    <% elsif is_success %>
+      <%# ── Success state ── %>
+
+      <%# Optimal cart banner %>
+      <% if optimal_cart.present? && optimal_cart.is_a?(Hash) %>
+        <div class="mb-8">
+          <%= render "comparisons/optimal_cart",
+              optimal_cart: optimal_cart.transform_keys(&:to_sym),
+              mode: mode %>
+        </div>
+      <% end %>
+
+      <%# Product cards grid %>
+      <% if comp_items.any? %>
+        <div class="mb-4 flex items-center justify-between">
+          <h2 class="text-lg font-bold text-slate-900">Détail par produit</h2>
+          <span class="text-sm text-slate-500"><%= comp_items.size %> résultat<%= comp_items.size > 1 ? "s" : "" %></span>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <% comp_items.each do |item| %>
+            <%= render "comparisons/product_card", item: item %>
+          <% end %>
+        </div>
+
+      <%# Fallback: single-store result (from CartBuilder) %>
+      <% elsif @result[:url].present? || @result[:details].present? %>
+        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 class="text-base font-bold text-slate-900">Panier prêt</h2>
+          <% if @result[:url].present? %>
+            <p class="mt-3">
+              <a href="<%= @result[:url] %>" target="_blank" rel="noopener noreferrer"
+                 class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors">
+                Ouvrir le panier ↗
+              </a>
+            </p>
+          <% end %>
+          <% details = (@result[:details] || {}).is_a?(Hash) ? @result[:details].transform_keys(&:to_sym) : {} %>
+          <% if details[:addedCount].present? %>
+            <p class="mt-3 text-sm text-slate-600">
+              Produits ajoutés: <strong><%= details[:addedCount] %></strong> / <strong><%= details[:requestedCount] || items.size %></strong>
+            </p>
+          <% end %>
+          <% Array(details[:notFoundItems]).each do |nf| %>
+            <p class="mt-1 text-sm text-amber-700">— Non trouvé: <%= nf %></p>
+          <% end %>
+        </div>
+      <% end %>
+
+    <% else %>
+      <%# Unknown state %>
+      <div class="rounded-2xl border border-slate-200 bg-white p-8 text-center">
+        <p class="text-slate-500">Résultat indisponible ou expiré.</p>
+        <%= link_to "Nouvelle comparaison", root_path,
+            class: "mt-4 inline-flex items-center rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors" %>
+      </div>
+    <% end %>
+
+  </div><%# /comparison-results %>
+
+</div>

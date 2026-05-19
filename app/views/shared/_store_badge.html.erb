@@ -1,0 +1,17 @@
+<%# Store badge component %>
+<%# Usage: render "shared/store_badge", store: "leclerc" %>
+<% store ||= "" %>
+
+<% store_config = {
+  "leclerc"    => { label: "Leclerc",     classes: "bg-blue-50 text-blue-700 ring-blue-200",    dot: "bg-blue-500" },
+  "carrefour"  => { label: "Carrefour",   classes: "bg-red-50 text-red-700 ring-red-200",       dot: "bg-red-500" },
+  "intermarche"=> { label: "Intermarché", classes: "bg-orange-50 text-orange-700 ring-orange-200", dot: "bg-orange-500" },
+  "superu"     => { label: "Super U",     classes: "bg-emerald-50 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500" }
+}.freeze %>
+
+<% cfg = store_config[store.to_s.downcase] || { label: store.to_s.capitalize, classes: "bg-slate-100 text-slate-700 ring-slate-200", dot: "bg-slate-400" } %>
+
+<span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 <%= cfg[:classes] %>">
+  <span class="h-1.5 w-1.5 rounded-full <%= cfg[:dot] %>"></span>
+  <%= cfg[:label] %>
+</span>
