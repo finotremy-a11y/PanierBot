@@ -1,4 +1,6 @@
 Rails.application.routes.draw do
+  devise_for :users
+
   namespace :api do
     namespace :v1 do
       post :compare, to: "comparisons#create"
@@ -13,6 +15,16 @@ Rails.application.routes.draw do
   # Landing page
   root "home#index"
   get "home", to: "home#index", as: :home
+
+  # SaaS account pages
+  get "account", to: "accounts#show"
+  get "billing", to: "billing#show"
+  get "plans", to: "plans#index"
+  get "usage", to: "usage#show"
+
+  # Stripe billing endpoints
+  post "billing/create_checkout_session", to: "billing#create_checkout_session"
+  post "billing/webhook", to: "billing#webhook"
 
   # Comparison workflow (multi-store or single-store):
   # POST /compare        -> launch comparison job

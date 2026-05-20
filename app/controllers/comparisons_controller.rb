@@ -1,4 +1,8 @@
 class ComparisonsController < ApplicationController
+  include QuotaEnforcement
+
+  before_action :authenticate_user!
+
   STRATEGIES = %w[cheapest best_per_kg per_unit best_per_l].freeze
   MODES      = %w[single_store multi_store].freeze
   STORES     = %w[leclerc carrefour intermarche superu].freeze
@@ -26,6 +30,8 @@ class ComparisonsController < ApplicationController
       return render_validation_error("Veuillez saisir au moins un produit.")
     end
 
+    return unless enforce_quota!(items: items, mode: mode)
+
     result_id = SecureRandom.uuid
 
     Rails.logger.info(
@@ -34,6 +40,7 @@ class ComparisonsController < ApplicationController
     )
 
     BuildComparisonJob.perform_later(result_id, items, strategy, mode, store, city)
+    track_comparison_usage!(items_count: items.size)
 
     Rails.cache.write(
       cache_key_for(result_id),

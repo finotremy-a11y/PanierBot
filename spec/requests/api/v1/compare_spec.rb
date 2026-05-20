@@ -50,7 +50,10 @@ RSpec.describe "Api::V1::Compare", type: :request do
         headers: headers
 
       expect(response).to have_http_status(:bad_request)
-      expect(JSON.parse(response.body)["error"]).to include("items")
+      body = JSON.parse(response.body)
+      expect(body["error"]).to eq("bad_request")
+      expect(body["message"]).to include("items")
+      expect(body["code"]).to eq("invalid_request")
     end
 
     it "requires API key" do
@@ -63,6 +66,57 @@ RSpec.describe "Api::V1::Compare", type: :request do
         headers: { "CONTENT_TYPE" => "application/json" }
 
       expect(response).to have_http_status(:unauthorized)
+      body = JSON.parse(response.body)
+      expect(body).to include(
+        "error" => "unauthorized",
+        "code" => "api_key_invalid"
+      )
+    end
+
+    it "rate limits free users on compare" do
+      user = User.create!(email: "free@example.com", password: "password123", plan: :free)
+
+      allow_any_instance_of(FinalCartBuilder).to receive(:call).and_return(
+        {
+          success: true,
+          products: [],
+          total: 0,
+          totals_by_store: {},
+          stores: [],
+          logs: [],
+          errors: []
+        }
+      )
+
+      10.times do
+        post "/api/v1/compare",
+          params: {
+            items: ["pates"],
+            strategy: "cheapest",
+            mode: "single_store"
+          }.to_json,
+          headers: headers.merge("X-User-Id" => user.id.to_s)
+
+        expect(response).to have_http_status(:ok)
+      end
+
+      post "/api/v1/compare",
+        params: {
+          items: ["pates"],
+          strategy: "cheapest",
+          mode: "single_store"
+        }.to_json,
+        headers: headers.merge("X-User-Id" => user.id.to_s)
+
+      expect(response).to have_http_status(:too_many_requests)
+
+      body = JSON.parse(response.body)
+      expect(body).to include(
+        "error" => "rate_limited",
+        "code" => "rate_limit_exceeded"
+      )
+      expect(body["retry_after"]).to be_present
+      expect(response.headers["Retry-After"]).to be_present
     end
   end
 end

@@ -1,0 +1,147 @@
+
+> panierbot-playwright@1.0.0 load-test
+> node load_tests/run_load_tests.js
+
+
+=== Scenario 10 utilisateurs ===
+Test run id: t5rxf_5e7zktzkf6hjew5pwcz3r64qe7r9y_k8er
+Phase started: steady-10-users (index: 0, duration: 5s) 13:44:22(+0200)
+
+Phase completed: steady-10-users (index: 0, duration: 5s) 13:44:27(+0200)
+
+--------------------------------------
+Metrics for period to: 13:44:30(+0200) (width: 4.805s)
+--------------------------------------
+
+errors.ECONNREFUSED: ........................................................... 50
+http.request_rate: ............................................................. 10/sec
+http.requests: ................................................................. 50
+vusers.created: ................................................................ 50
+vusers.created_by_name.Compare quick cart: ..................................... 6
+vusers.created_by_name.Health and stores: ...................................... 44
+vusers.failed: ................................................................. 50
+
+
+All VUs finished. Total time: 5 seconds
+
+--------------------------------
+Summary report @ 13:44:28(+0200)
+--------------------------------
+
+errors.ECONNREFUSED: ........................................................... 50
+http.request_rate: ............................................................. 10/sec
+http.requests: ................................................................. 50
+vusers.created: ................................................................ 50
+vusers.created_by_name.Compare quick cart: ..................................... 6
+vusers.created_by_name.Health and stores: ...................................... 44
+vusers.failed: ................................................................. 50
+Log file: /home/remy/perso/appli_comparatif_course_drive/PanierBot/playwright/load_tests/results/artillery_result_10.json
+
+┌───────────────────────────────────────────────────────────────────────┐
+|  The "report" command has been deprecated and is no longer supported  |
+|                                                                       |
+|  You can use Artillery Cloud (https://app.artillery.io) to visualize  |
+|  test results, create custom reports, and share them with your team.  |
+└───────────────────────────────────────────────────────────────────────┘
+
+
+=== Scenario 50 utilisateurs ===
+Test run id: tbf4t_m7ej3tth5hkxx36d969j5ehyn3par_gff4
+Phase started: steady-50-users (index: 0, duration: 5s) 13:44:34(+0200)
+
+Phase completed: steady-50-users (index: 0, duration: 5s) 13:44:39(+0200)
+
+--------------------------------------
+Metrics for period to: 13:44:40(+0200) (width: 5.178s)
+--------------------------------------
+
+errors.ECONNREFUSED: ........................................................... 250
+http.request_rate: ............................................................. 50/sec
+http.requests: ................................................................. 250
+vusers.created: ................................................................ 250
+vusers.created_by_name.Compare quick cart: ..................................... 52
+vusers.created_by_name.Health and stores: ...................................... 198
+vusers.failed: ................................................................. 250
+
+
+All VUs finished. Total time: 8 seconds
+
+--------------------------------
+Summary report @ 13:44:42(+0200)
+--------------------------------
+
+errors.ECONNREFUSED: ........................................................... 250
+http.request_rate: ............................................................. 50/sec
+http.requests: ................................................................. 250
+vusers.created: ................................................................ 250
+vusers.created_by_name.Compare quick cart: ..................................... 52
+vusers.created_by_name.Health and stores: ...................................... 198
+vusers.failed: ................................................................. 250
+Log file: /home/remy/perso/appli_comparatif_course_drive/PanierBot/playwright/load_tests/results/artillery_result_50.json
+
+┌───────────────────────────────────────────────────────────────────────┐
+|  The "report" command has been deprecated and is no longer supported  |
+|                                                                       |
+|  You can use Artillery Cloud (https://app.artillery.io) to visualize  |
+|  test results, create custom reports, and share them with your team.  |
+└───────────────────────────────────────────────────────────────────────┘
+
+
+=== Scenario 100 utilisateurs ===
+Test run id: txjht_bmpwztqz633qgg8354wntnbrfmg6t_hwda
+Phase started: steady-100-users (index: 0, duration: 5s) 13:44:48(+0200)
+
+Phase completed: steady-100-users (index: 0, duration: 5s) 13:44:53(+0200)
+
+--------------------------------------
+Metrics for period to: 13:44:50(+0200) (width: 0.992s)
+--------------------------------------
+
+errors.ECONNREFUSED: ........................................................... 88
+http.request_rate: ............................................................. 88/sec
+http.requests: ................................................................. 88
+vusers.created: ................................................................ 88
+vusers.created_by_name.Compare quick cart: ..................................... 10
+vusers.created_by_name.Health and stores: ...................................... 78
+vusers.failed: ................................................................. 88
+
+
+--------------------------------------
+Metrics for period to: 13:45:00(+0200) (width: 4.239s)
+--------------------------------------
+
+errors.ECONNREFUSED: ........................................................... 412
+http.request_rate: ............................................................. 100/sec
+http.requests: ................................................................. 412
+vusers.created: ................................................................ 412
+vusers.created_by_name.Compare quick cart: ..................................... 55
+vusers.created_by_name.Health and stores: ...................................... 357
+vusers.failed: ................................................................. 412
+
+
+All VUs finished. Total time: 7 seconds
+
+--------------------------------
+Summary report @ 13:44:56(+0200)
+--------------------------------
+
+errors.ECONNREFUSED: ........................................................... 500
+http.request_rate: ............................................................. 95/sec
+http.requests: ................................................................. 500
+vusers.created: ................................................................ 500
+vusers.created_by_name.Compare quick cart: ..................................... 65
+vusers.created_by_name.Health and stores: ...................................... 435
+vusers.failed: ................................................................. 500
+Log file: /home/remy/perso/appli_comparatif_course_drive/PanierBot/playwright/load_tests/results/artillery_result_100.json
+
+┌───────────────────────────────────────────────────────────────────────┐
+|  The "report" command has been deprecated and is no longer supported  |
+|                                                                       |
+|  You can use Artillery Cloud (https://app.artillery.io) to visualize  |
+|  test results, create custom reports, and share them with your team.  |
+└───────────────────────────────────────────────────────────────────────┘
+
+
+Rapport consolidé: /home/remy/perso/appli_comparatif_course_drive/PanierBot/playwright/load_tests/reports/load-test-report.html
+Résumé JSON: /home/remy/perso/appli_comparatif_course_drive/PanierBot/playwright/load_tests/results/load_test_summary.json
+🟢 Tests de charge terminés

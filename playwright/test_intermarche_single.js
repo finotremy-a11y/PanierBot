@@ -28,4 +28,4 @@ await runSingleStoreAudit({
 assertUnitNormalization();
 
 console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-console.log("🟢 Intermarché validée en mode réel\n");
+console.log("🟢 Intermarché validée (CDP)\n");

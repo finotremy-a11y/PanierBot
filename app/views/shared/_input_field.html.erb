@@ -1,0 +1,44 @@
+<%#
+  Premium Form Input Component
+  Usage:
+    <%= render "shared/input_field", f: f, field: :email, label: "Email" %>
+    <%= render "shared/input_field", f: f, field: :password, label: "Password", help_text: "Min 8 chars" %>
+  
+  Supports: text, email, password, number, tel, url, textarea, select
+%>
+<div class="space-y-2">
+  <% if label.present? %>
+    <%= f.label field, label, class: "label #{'label-required' if required}" %>
+  <% end %>
+
+  <% case input_type || "text" %>
+    <% when "textarea" %>
+      <%= f.text_area field, 
+          class: "input textarea", 
+          placeholder: placeholder,
+          rows: rows || 5,
+          required: required,
+          aria_label: label || field %>
+    <% when "select" %>
+      <%= f.collection_select field,
+          options || [],
+          :id,
+          :name,
+          { include_blank: "Sélectionner..." },
+          { class: "input select", required: required, aria_label: label || field } %>
+    <% else %>
+      <%= f.send(input_type || :text_field, field,
+          class: "input",
+          placeholder: placeholder,
+          required: required,
+          aria_label: label || field) %>
+  <% end %>
+
+  <% if help_text.present? %>
+    <p class="text-xs text-slate-500"><%= help_text %></p>
+  <% end %>
+
+  <% if error.present? %>
+    <p class="text-xs text-red-600"><%= error %></p>
+  <% end %>
+</div>

@@ -28,4 +28,4 @@ await runSingleStoreAudit({
 assertUnitNormalization();
 
 console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-console.log("🟢 Carrefour validée en mode réel\n");
+console.log("🟢 Carrefour validée (CDP)\n");

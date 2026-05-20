@@ -1,0 +1,49 @@
+{
+  "aggregate": {
+    "counters": {
+      "vusers.created_by_name.Health and stores": 198,
+      "vusers.created": 250,
+      "http.requests": 250,
+      "plugins.metrics-by-endpoint./api/v1/health.errors.ECONNREFUSED": 198,
+      "errors.ECONNREFUSED": 250,
+      "vusers.failed": 250,
+      "vusers.created_by_name.Compare quick cart": 52,
+      "plugins.metrics-by-endpoint./api/v1/compare.errors.ECONNREFUSED": 52
+    },
+    "rates": {
+      "http.request_rate": 50
+    },
+    "firstCounterAt": 1779277474642,
+    "lastCounterAt": 1779277479820,
+    "firstMetricAt": 1779277474642,
+    "lastMetricAt": 1779277479820,
+    "period": 1779277470000,
+    "summaries": {},
+    "histograms": {}
+  },
+  "intermediate": [
+    {
+      "counters": {
+        "vusers.created_by_name.Health and stores": 198,
+        "vusers.created": 250,
+        "http.requests": 250,
+        "plugins.metrics-by-endpoint./api/v1/health.errors.ECONNREFUSED": 198,
+        "errors.ECONNREFUSED": 250,
+        "vusers.failed": 250,
+        "vusers.created_by_name.Compare quick cart": 52,
+        "plugins.metrics-by-endpoint./api/v1/compare.errors.ECONNREFUSED": 52
+      },
+      "rates": {
+        "http.request_rate": 50
+      },
+      "http.request_rate": null,
+      "firstCounterAt": 1779277474642,
+      "lastCounterAt": 1779277479820,
+      "firstMetricAt": 1779277474642,
+      "lastMetricAt": 1779277479820,
+      "period": "1779277470000",
+      "summaries": {},
+      "histograms": {}
+    }
+  ]
+}

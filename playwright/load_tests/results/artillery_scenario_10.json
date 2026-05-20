@@ -1,0 +1,58 @@
+{
+  "config": {
+    "target": "http://localhost:3000",
+    "phases": [
+      {
+        "duration": 5,
+        "arrivalRate": 10,
+        "maxVusers": 10,
+        "name": "steady-10-users"
+      }
+    ],
+    "http": {
+      "timeout": 30,
+      "headers": {
+        "X-API-Key": "test-api-key",
+        "Content-Type": "application/json"
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "name": "Health and stores",
+      "weight": 5,
+      "flow": [
+        {
+          "get": {
+            "url": "/api/v1/health"
+          }
+        },
+        {
+          "get": {
+            "url": "/api/v1/stores"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Compare quick cart",
+      "weight": 1,
+      "flow": [
+        {
+          "post": {
+            "url": "/api/v1/compare",
+            "json": {
+              "items": [
+                "lait",
+                "pain",
+                "pates"
+              ],
+              "strategy": "cheapest",
+              "mode": "multi_store"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

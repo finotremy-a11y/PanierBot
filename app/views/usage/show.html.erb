@@ -1,0 +1,23 @@
+<% content_for :title, "Usage" %>
+
+<section class="mx-auto max-w-4xl px-4 py-10 sm:px-6">
+  <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+    <h1 class="text-2xl font-bold text-slate-900">Usage mensuel</h1>
+    <p class="mt-2 text-sm text-slate-600">Suivi de votre consommation pour le mois en cours.</p>
+
+    <dl class="mt-6 grid gap-4 sm:grid-cols-3">
+      <div class="rounded-xl bg-slate-50 p-4">
+        <dt class="text-xs uppercase tracking-wide text-slate-500">Comparaisons</dt>
+        <dd class="mt-1 text-xl font-bold text-slate-900"><%= @usage.comparisons_count %></dd>
+      </div>
+      <div class="rounded-xl bg-slate-50 p-4">
+        <dt class="text-xs uppercase tracking-wide text-slate-500">Produits analysés</dt>
+        <dd class="mt-1 text-xl font-bold text-slate-900"><%= @usage.products_count %></dd>
+      </div>
+      <div class="rounded-xl bg-slate-50 p-4">
+        <dt class="text-xs uppercase tracking-wide text-slate-500">Quota restant</dt>
+        <dd class="mt-1 text-xl font-bold text-slate-900"><%= @remaining %></dd>
+      </div>
+    </dl>
+  </div>
+</section>

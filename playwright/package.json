@@ -22,10 +22,14 @@
     "test-extract-products": "node test_extract_products.js",
     "test-retry": "node test_retry.js",
     "install-browsers": "npx playwright install",
-    "install-deps": "npx playwright install-deps"
+    "install-deps": "npx playwright install-deps",
+    "load-test": "node load_tests/run_load_tests.js"
   },
   "dependencies": {
     "minimist": "^1.2.8",
     "playwright": "^1.54.0"
+  },
+  "devDependencies": {
+    "artillery": "^2.0.23"
   }
 }

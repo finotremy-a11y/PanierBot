@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PanierBot - Rapport de charge</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #102133;
+      --muted: #526273;
+      --line: #d8e0ea;
+      --accent: #0a7d5b;
+    }
+
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at top right, #dff1eb, transparent 40%), var(--bg);
+      padding: 24px;
+    }
+
+    .card {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(16, 33, 51, 0.08);
+      overflow: hidden;
+    }
+
+    header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(120deg, #ecf9f4 0%, #ffffff 70%);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.4rem;
+      letter-spacing: 0.02em;
+    }
+
+    p {
+      margin: 8px 0 0;
+      color: var(--muted);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      padding: 16px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 980px;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 10px;
+      font-size: 0.92rem;
+      text-align: center;
+    }
+
+    th {
+      background: #f0f5fb;
+      font-weight: 600;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <section class="card">
+    <header>
+      <h1>PanierBot - Rapport de tests de charge</h1>
+      <p>Généré le 2026-05-20T11:44:58.592Z · Cible API: http://localhost:3000 · CDP: http://127.0.0.1:9222</p>
+    </header>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Utilisateurs</th>
+            <th>API avg (ms)</th>
+            <th>API p95 (ms)</th>
+            <th>API erreurs</th>
+            <th>Scraping avg (ms)</th>
+            <th>Scraping p95 (ms)</th>
+            <th>Scraping erreurs</th>
+            <th>CPU avg/max</th>
+            <th>CDP stabilité</th>
+            <th>CDP avg (ms)</th>
+            <th>Détail Artillery</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+      <tr>
+        <td>10</td>
+        <td>0</td>
+        <td>0</td>
+        <td>0%</td>
+        <td>0.77</td>
+        <td>1.37</td>
+        <td>0%</td>
+        <td>27.65% / 69.22%</td>
+        <td>100%</td>
+        <td>5193.18</td>
+        <td><a href="artillery_report_10.html">rapport 10</a></td>
+      </tr>
+    
+
+      <tr>
+        <td>50</td>
+        <td>0</td>
+        <td>0</td>
+        <td>0%</td>
+        <td>0.78</td>
+        <td>1.41</td>
+        <td>0%</td>
+        <td>29.07% / 67.85%</td>
+        <td>100%</td>
+        <td>5243.45</td>
+        <td><a href="artillery_report_50.html">rapport 50</a></td>
+      </tr>
+    
+
+      <tr>
+        <td>100</td>
+        <td>0</td>
+        <td>0</td>
+        <td>0%</td>
+        <td>0.77</td>
+        <td>1.41</td>
+        <td>0%</td>
+        <td>34.59% / 78.31%</td>
+        <td>100%</td>
+        <td>5204.94</td>
+        <td><a href="artillery_report_100.html">rapport 100</a></td>
+      </tr>
+    
+        </tbody>
+      </table>
+    </div>
+  </section>
+</body>
+</html>

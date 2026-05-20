@@ -1,0 +1,204 @@
+{
+  "generatedAt": "2026-05-20T11:44:58.593Z",
+  "apiBaseUrl": "http://localhost:3000",
+  "cdpUrl": "http://127.0.0.1:9222",
+  "durationSec": 5,
+  "scenarios": [
+    {
+      "users": 10,
+      "api": {
+        "users": 10,
+        "resultJsonPath": "/home/remy/perso/appli_comparatif_course_drive/PanierBot/playwright/load_tests/results/artillery_result_10.json",
+        "resultHtmlPath": "/home/remy/perso/appli_comparatif_course_drive/PanierBot/playwright/load_tests/reports/artillery_report_10.html",
+        "metrics": {
+          "requests": 50,
+          "errors": 0,
+          "errorRate": 0,
+          "latency": {
+            "avgMs": 0,
+            "p95Ms": 0,
+            "minMs": 0,
+            "maxMs": 0
+          }
+        }
+      },
+      "scraping": {
+        "users": 10,
+        "durationSec": 5,
+        "operations": 5825,
+        "errors": 0,
+        "errorRate": 0,
+        "latency": {
+          "count": 5825,
+          "minMs": 0.41,
+          "maxMs": 10.31,
+          "avgMs": 0.77,
+          "p95Ms": 1.37
+        }
+      },
+      "cdp": {
+        "attempts": 1,
+        "success": 1,
+        "failures": 0,
+        "stabilityPercent": 100,
+        "latency": {
+          "avgMs": 5193.18,
+          "p95Ms": 5193.18,
+          "minMs": 5193.18,
+          "maxMs": 5193.18
+        },
+        "cdpUrl": "http://127.0.0.1:9222"
+      },
+      "cpu": {
+        "avgCpuPercent": 27.65,
+        "maxCpuPercent": 69.22,
+        "samples": [
+          57.49,
+          42.39,
+          61.53,
+          69.22,
+          23.48,
+          17.89,
+          6.82,
+          11.11,
+          7.89,
+          5.95,
+          11.42,
+          16.66
+        ]
+      }
+    },
+    {
+      "users": 50,
+      "api": {
+        "users": 50,
+        "resultJsonPath": "/home/remy/perso/appli_comparatif_course_drive/PanierBot/playwright/load_tests/results/artillery_result_50.json",
+        "resultHtmlPath": "/home/remy/perso/appli_comparatif_course_drive/PanierBot/playwright/load_tests/reports/artillery_report_50.html",
+        "metrics": {
+          "requests": 250,
+          "errors": 0,
+          "errorRate": 0,
+          "latency": {
+            "avgMs": 0,
+            "p95Ms": 0,
+            "minMs": 0,
+            "maxMs": 0
+          }
+        }
+      },
+      "scraping": {
+        "users": 50,
+        "durationSec": 5,
+        "operations": 6167,
+        "errors": 0,
+        "errorRate": 0,
+        "latency": {
+          "count": 6167,
+          "minMs": 0.41,
+          "maxMs": 9.14,
+          "avgMs": 0.78,
+          "p95Ms": 1.41
+        }
+      },
+      "cdp": {
+        "attempts": 1,
+        "success": 1,
+        "failures": 0,
+        "stabilityPercent": 100,
+        "latency": {
+          "avgMs": 5243.45,
+          "p95Ms": 5243.45,
+          "minMs": 5243.45,
+          "maxMs": 5243.45
+        },
+        "cdpUrl": "http://127.0.0.1:9222"
+      },
+      "cpu": {
+        "avgCpuPercent": 29.07,
+        "maxCpuPercent": 67.85,
+        "samples": [
+          41.18,
+          52.39,
+          67.85,
+          66.88,
+          36.67,
+          33.41,
+          21.5,
+          19.23,
+          19.72,
+          9.83,
+          2.88,
+          3.37,
+          13.73,
+          18.28
+        ]
+      }
+    },
+    {
+      "users": 100,
+      "api": {
+        "users": 100,
+        "resultJsonPath": "/home/remy/perso/appli_comparatif_course_drive/PanierBot/playwright/load_tests/results/artillery_result_100.json",
+        "resultHtmlPath": "/home/remy/perso/appli_comparatif_course_drive/PanierBot/playwright/load_tests/reports/artillery_report_100.html",
+        "metrics": {
+          "requests": 500,
+          "errors": 0,
+          "errorRate": 0,
+          "latency": {
+            "avgMs": 0,
+            "p95Ms": 0,
+            "minMs": 0,
+            "maxMs": 0
+          }
+        }
+      },
+      "scraping": {
+        "users": 100,
+        "durationSec": 5,
+        "operations": 6287,
+        "errors": 0,
+        "errorRate": 0,
+        "latency": {
+          "count": 6287,
+          "minMs": 0.41,
+          "maxMs": 10.45,
+          "avgMs": 0.77,
+          "p95Ms": 1.41
+        }
+      },
+      "cdp": {
+        "attempts": 1,
+        "success": 1,
+        "failures": 0,
+        "stabilityPercent": 100,
+        "latency": {
+          "avgMs": 5204.94,
+          "p95Ms": 5204.94,
+          "minMs": 5204.94,
+          "maxMs": 5204.94
+        },
+        "cdpUrl": "http://127.0.0.1:9222"
+      },
+      "cpu": {
+        "avgCpuPercent": 34.59,
+        "maxCpuPercent": 78.31,
+        "samples": [
+          28.99,
+          41.16,
+          72.79,
+          78.31,
+          42.37,
+          44.75,
+          39.28,
+          36,
+          37.14,
+          22.63,
+          2.57,
+          2.88,
+          16.92,
+          18.54
+        ]
+      }
+    }
+  ]
+}

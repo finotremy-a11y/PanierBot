@@ -1,6 +1,5 @@
 class Api::V1::BaseController < ActionController::API
   before_action :authenticate_api_key!
-  around_action :log_api_request
 
   rescue_from(StandardError, with: :render_internal_error)
   rescue_from ActionController::ParameterMissing, with: :render_bad_request
@@ -14,7 +13,12 @@ class Api::V1::BaseController < ActionController::API
 
     return if ActiveSupport::SecurityUtils.secure_compare(provided_key.to_s, expected_key.to_s)
 
-    render json: { error: "Unauthorized" }, status: :unauthorized
+    render_api_error(
+      status: :unauthorized,
+      error: "unauthorized",
+      message: "Invalid or missing API credentials.",
+      code: "api_key_invalid"
+    )
   end
 
   def bearer_token
@@ -25,20 +29,33 @@ class Api::V1::BaseController < ActionController::API
   end
 
   def render_bad_request(error)
-    render json: { error: error.message }, status: :bad_request
+    render_api_error(
+      status: :bad_request,
+      error: "bad_request",
+      message: error.message,
+      code: "invalid_request"
+    )
   end
 
   def render_internal_error(error)
     Rails.logger.error(api_log_payload(level: "error", event: "api.exception", error: error.message, error_class: error.class.name).to_json)
-    render json: { error: "Internal server error" }, status: :internal_server_error
+    render_api_error(
+      status: :internal_server_error,
+      error: "internal_server_error",
+      message: "An unexpected error occurred.",
+      code: "internal_error"
+    )
   end
 
-  def log_api_request
-    started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-    yield
-  ensure
-    duration_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at) * 1000.0).round(2)
-    Rails.logger.info(api_log_payload(level: "info", event: "api.request", duration_ms: duration_ms).to_json)
+  def render_api_error(status:, error:, message:, code:, retry_after: nil)
+    payload = {
+      error: error,
+      message: message,
+      code: code
+    }
+    payload[:retry_after] = retry_after if retry_after
+
+    render json: payload, status: status
   end
 
   def api_log_payload(extra = {})

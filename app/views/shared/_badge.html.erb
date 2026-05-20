@@ -1,0 +1,23 @@
+<%#
+  Premium Badge Component
+  Usage:
+    <%= render "shared/badge", text: "Active", variant: "success" %>
+    <%= render "shared/badge", text: "Beta", variant: "warning", icon: "sparkles" %>
+  
+  Variants: primary, success, warning, danger, neutral
+%>
+<% variant = variant || "primary" %>
+<% class_map = {
+  primary: "badge-primary",
+  success: "badge-success",
+  warning: "badge-warning",
+  danger: "badge-danger",
+  neutral: "badge-neutral"
+} %>
+
+<span class="badge <%= class_map[variant.to_sym] %>">
+  <% if icon.present? %>
+    <%= render "shared/icon", name: icon, size: "xs" %>
+  <% end %>
+  <%= text %>
+</span>

@@ -1,39 +1,142 @@
-<%#
-  Entry form for PanierBot.
-  Users choose a store and provide one item per line.
-  Future extension: add quantity parsing and per-item options (brand, budget, bio).
-%>
-<section class="mx-auto w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-  <h1 class="text-2xl font-bold text-slate-900">PanierBot</h1>
-  <p class="mt-2 text-slate-600">
-    Choisissez votre enseigne puis collez une liste de courses (une ligne = un produit).
-  </p>
+<%# Premium form for shopping list with live validation %>
+<% content_for :title, "Créer une liste — PanierBot" %>
 
-  <%= form_with url: carts_path, scope: :cart, method: :post, class: "mt-8 space-y-6" do |f| %>
-    <div>
-      <%= f.label :store, "Enseigne", class: "mb-2 block text-sm font-medium text-slate-700" %>
-      <%= f.select :store,
-          @stores.map { |store| [store.capitalize, store] },
-          {},
-          class: "block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-slate-500 focus:outline-none" %>
+<div class="space-y-6 py-10">
+  <%# ── Hero section ── %>
+  <div class="mx-auto max-w-3xl px-4 text-center sm:px-6">
+    <div class="inline-block rounded-full bg-indigo-100 px-4 py-2 text-sm font-semibold text-indigo-700 ring-1 ring-indigo-200">
+      ✨ Nouvelle comparaison
     </div>
+    <h1 class="mt-4 text-3xl font-extrabold text-slate-900 sm:text-4xl">
+      Comparez vos courses
+    </h1>
+    <p class="mt-4 text-lg text-slate-600">
+      Trouvez les meilleurs prix en drive en quelques secondes.
+    </p>
+  </div>
 
-    <div>
-      <%= f.label :strategy, "Stratégie de comparaison", class: "mb-2 block text-sm font-medium text-slate-700" %>
-      <%= f.select :strategy,
-          [["Moins cher (prix total)", "cheapest"], ["Meilleur prix/kg", "best_per_kg"]],
-          { selected: "cheapest" },
-          class: "block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-slate-500 focus:outline-none" %>
+  <%# ── Form card ── %>
+  <form class="card-premium mx-auto max-w-2xl px-4 sm:px-6" method="post" action="<%= carts_path %>">
+    <div class="card-body space-y-8">
+      <%= hidden_field_tag :authenticity_token, form_authenticity_token %>
+
+      <%# ── Store Selection ── %>
+      <div class="space-y-3">
+        <label for="cart_store" class="label label-required">
+          Sélectionnez votre enseigne
+        </label>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <% @stores.each do |store| %>
+            <label class="group relative cursor-pointer">
+              <input type="radio" name="cart[store]" value="<%= store %>" 
+                     class="sr-only peer" required aria-label="<%= store.capitalize %>">
+              <div class="rounded-lg border-2 border-slate-200 bg-white px-4 py-3 transition-all peer-checked:border-indigo-600 peer-checked:bg-indigo-50 hover:border-slate-300 peer-focus:ring-2 peer-focus:ring-indigo-500 peer-focus:ring-offset-2">
+                <% case store.downcase %>
+                  <% when "leclerc" %>
+                    <p class="font-semibold text-slate-900">🏪 E.Leclerc</p>
+                  <% when "carrefour" %>
+                    <p class="font-semibold text-slate-900">🛒 Carrefour</p>
+                  <% when "intermarche" %>
+                    <p class="font-semibold text-slate-900">🏬 Intermarché</p>
+                  <% when "super_u", "super u" %>
+                    <p class="font-semibold text-slate-900">🌿 Super U</p>
+                <% end %>
+                <p class="mt-1 text-xs text-slate-500">Comparer les prix</p>
+              </div>
+            </label>
+          <% end %>
+        </div>
+      </div>
+
+      <%# ── Strategy Selection ── %>
+      <div class="space-y-3">
+        <label class="label label-required">
+          Stratégie de comparaison
+        </label>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="group relative cursor-pointer">
+            <input type="radio" name="cart[strategy]" value="cheapest" class="sr-only peer" checked 
+                   aria-label="Moins cher">
+            <div class="rounded-lg border-2 border-slate-200 bg-white px-4 py-3 transition-all peer-checked:border-indigo-600 peer-checked:bg-indigo-50 hover:border-slate-300">
+              <p class="font-semibold text-slate-900">💰 Moins cher</p>
+              <p class="mt-1 text-xs text-slate-500">Prix total minimal</p>
+            </div>
+          </label>
+          <label class="group relative cursor-pointer">
+            <input type="radio" name="cart[strategy]" value="best_per_kg" class="sr-only peer"
+                   aria-label="Meilleur prix/kg">
+            <div class="rounded-lg border-2 border-slate-200 bg-white px-4 py-3 transition-all peer-checked:border-indigo-600 peer-checked:bg-indigo-50 hover:border-slate-300">
+              <p class="font-semibold text-slate-900">⚖️ Meilleur €/kg</p>
+              <p class="mt-1 text-xs text-slate-500">Qualité vs prix</p>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <%# ── Shopping List Input ── %>
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <label for="cart_items_text" class="label label-required">
+            Votre liste de courses
+          </label>
+          <span class="text-xs text-slate-500">
+            <span id="item-count">0</span> articles
+          </span>
+        </div>
+        <textarea name="cart[items_text]" id="cart_items_text"
+                  rows="8"
+                  placeholder="Un produit par ligne&#10;&#10;Exemples :&#10;Pâtes Barilla&#10;Lait demi-écrémé 1L&#10;Bananes&#10;Œufs (12)&#10;Pain de mie complet"
+                  class="input textarea resize-none font-mono text-sm"
+                  required aria-label="Liste de courses" 
+                  data-controller="list-counter"></textarea>
+        <p class="text-xs text-slate-500">
+          💡 Copiez-collez votre liste d'un appel précédent ou saisissez manuellement.
+        </p>
+      </div>
+
+      <%# ── CTA Button ── %>
+      <button type="submit" class="btn btn-primary btn-lg w-full justify-center">
+        <%= render "shared/icon", name: "arrow-right", size: "sm" %>
+        Comparer mes prix
+      </button>
+
+      <p class="text-center text-xs text-slate-500">
+        Temps estimé : <strong>2-3 minutes</strong> • Résultats en direct
+      </p>
     </div>
+  </form>
 
-    <div>
-      <%= f.label :items_text, "Liste de courses", class: "mb-2 block text-sm font-medium text-slate-700" %>
-      <%= f.text_area :items_text,
-          rows: 10,
-          placeholder: "pates\nlait demi-ecreme\nbananes",
-          class: "block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-slate-500 focus:outline-none" %>
+  <%# ── Info cards ── %>
+  <div class="mx-auto max-w-2xl px-4 grid gap-4 sm:grid-cols-3 sm:px-6">
+    <div class="rounded-xl border border-slate-200 bg-white p-4 text-center">
+      <p class="text-2xl">⚡</p>
+      <p class="mt-2 text-sm font-semibold text-slate-900">Ultra rapide</p>
+      <p class="mt-1 text-xs text-slate-600">Résultats en 2-3 minutes</p>
     </div>
+    <div class="rounded-xl border border-slate-200 bg-white p-4 text-center">
+      <p class="text-2xl">🏪</p>
+      <p class="mt-2 text-sm font-semibold text-slate-900">Multi-enseignes</p>
+      <p class="mt-1 text-xs text-slate-600">Leclerc, Carrefour, etc.</p>
+    </div>
+    <div class="rounded-xl border border-slate-200 bg-white p-4 text-center">
+      <p class="text-2xl">💵</p>
+      <p class="mt-2 text-sm font-semibold text-slate-900">Économisez</p>
+      <p class="mt-1 text-xs text-slate-600">Jusqu'à 30% d'économies</p>
+    </div>
+  </div>
+</div>
 
-    <%= f.submit "Construire mon panier", class: "inline-flex items-center rounded-lg bg-slate-900 px-5 py-3 font-medium text-white transition hover:bg-slate-700" %>
-  <% end %>
-</section>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const textarea = document.getElementById('cart_items_text');
+    const counter = document.getElementById('item-count');
+    
+    function updateCount() {
+      const items = textarea.value.trim().split('\n').filter(line => line.trim());
+      counter.textContent = items.length;
+    }
+    
+    textarea.addEventListener('input', updateCount);
+    updateCount();
+  });
+</script>

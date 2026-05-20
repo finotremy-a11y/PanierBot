@@ -1,0 +1,38 @@
+<%#
+  Premium Loader Component
+  Usage:
+    <%= render "shared/loader", message: "Loading..." %>
+    <%= render "shared/loader", type: "dots", size: "lg" %>
+  
+  Types: spinner, dots, skeleton
+  Sizes: sm, md, lg
+%>
+<% type = type || "spinner" %>
+<% size = size || "md" %>
+
+<div class="flex flex-col items-center gap-4">
+  <% case type %>
+    <% when "spinner" %>
+      <div class="loader-spinner"></div>
+    <% when "dots" %>
+      <div class="loader-dots">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+    <% when "skeleton" %>
+      <div class="skeleton h-8 w-32 rounded-lg"></div>
+  <% end %>
+
+  <% if message.present? %>
+    <p class="text-sm text-slate-600 text-center">
+      <%= message %>
+    </p>
+  <% end %>
+
+  <% if help_text.present? %>
+    <p class="text-xs text-slate-500 text-center max-w-xs">
+      <%= help_text %>
+    </p>
+  <% end %>
+</div>

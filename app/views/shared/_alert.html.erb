@@ -1,0 +1,44 @@
+<%#
+  Premium Alert Component
+  Usage:
+    <%= render "shared/alert", type: "success", message: "All done!" %>
+    <%= render "shared/alert", type: "error", message: "Something went wrong", dismissible: true %>
+  
+  Types: success, error, warning, info
+%>
+<% type = type || "info" %>
+<% class_map = {
+  success: "alert-success",
+  error: "alert-error",
+  warning: "alert-warning",
+  info: "alert-info"
+} %>
+<% icon_map = {
+  success: "check-circle",
+  error: "alert-circle",
+  warning: "alert-triangle",
+  info: "info"
+} %>
+
+<div class="alert <%= class_map[type.to_sym] %> animate-slide-up"
+     <% if dismissible %>data-controller="alert" data-action="click->alert#close"<% end %>>
+  <div class="flex items-start gap-3">
+    <div class="mt-0.5 flex-shrink-0">
+      <%= render "shared/icon", name: icon_map[type.to_sym], size: "sm" %>
+    </div>
+    <div class="flex-1">
+      <% if title.present? %>
+        <p class="font-semibold"><%= title %></p>
+      <% end %>
+      <p class="<%= 'mt-1' if title.present? %>">
+        <%= message %>
+      </p>
+    </div>
+    <% if dismissible %>
+      <button type="button" class="flex-shrink-0 opacity-70 hover:opacity-100 transition-opacity"
+              data-action="click->alert#close" aria-label="Fermer">
+        <%= render "shared/icon", name: "x", size: "sm" %>
+      </button>
+    <% end %>
+  </div>
+</div>

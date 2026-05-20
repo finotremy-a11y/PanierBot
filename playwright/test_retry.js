@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { retry, isRetriableError } from "./agents/retry.js";
+import { retry, isRetriableError } from "./retry.js";
 
 async function testRetriesOnTimeout() {
   let attempts = 0;
@@ -69,13 +69,62 @@ function testRetriableDetector() {
   err503.status = 503;
   assert.equal(isRetriableError(err503), true);
 
+  assert.equal(isRetriableError(new Error("DOM incomplet: missing selector for product card")), true);
+
   assert.equal(isRetriableError(new Error("Validation error: missing input")), false);
+}
+
+async function testFatal403StopsImmediately() {
+  let attempts = 0;
+
+  await assert.rejects(
+    retry(async () => {
+      attempts += 1;
+      const error = new Error("HTTP 403 Forbidden");
+      error.status = 403;
+      throw error;
+    }, {
+      retries: 5,
+      backoff: 10,
+      jitter: 0
+    }),
+    /HTTP 403 Forbidden/
+  );
+
+  assert.equal(attempts, 1);
+}
+
+async function testRetryAfterIsHonored() {
+  let attempts = 0;
+  const start = Date.now();
+
+  const result = await retry(async () => {
+    attempts += 1;
+    if (attempts === 1) {
+      const error = new Error("HTTP 429 Too Many Requests");
+      error.status = 429;
+      error.retryAfterMs = 25;
+      throw error;
+    }
+
+    return "retry-after-recovered";
+  }, {
+    retries: 2,
+    backoff: 1,
+    jitter: 0
+  });
+
+  assert.equal(result, "retry-after-recovered");
+  assert.equal(attempts, 2);
+  assert.ok(Date.now() - start >= 20);
 }
 
 async function main() {
   await testRetriesOnTimeout();
   await testFatalErrorStopsImmediately();
+  await testFatal403StopsImmediately();
   await testRetriesOnHttp429();
+  await testRetryAfterIsHonored();
   testRetriableDetector();
   console.log("✅ test-retry: all checks passed");
 }

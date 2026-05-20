@@ -344,11 +344,13 @@ async function discoverFallbackSelectors(page, criticalKey) {
   return unique(generated);
 }
 
-function trackBrokenSelector(criticalConfig, selector, reason) {
+function trackBrokenSelector(criticalConfig, selector, reason, { store = null, url = null } = {}) {
   const message = String(reason || "selector not found");
   criticalConfig.broken.push({
+    store,
     selector,
     reason: message,
+    url,
     at: nowIso()
   });
 
@@ -385,8 +387,9 @@ async function repairCriticalSelector({ page, storeKey, criticalKey, state, iter
     };
   }
 
-  console.warn(`🔎 Sélecteur cassé détecté | store=${storeKey} | cible=${criticalKey} | selector=${current || "<none>"}`);
-  trackBrokenSelector(criticalConfig, current, `iteration ${iteration}: selector introuvable`);
+  const currentUrl = await page.url();
+  console.warn(`🔎 Sélecteur cassé détecté | store=${storeKey} | cible=${criticalKey} | selector=${current || "<none>"} | url=${currentUrl}`);
+  trackBrokenSelector(criticalConfig, current, `iteration ${iteration}: selector introuvable`, { store: storeKey, url: currentUrl });
 
   const discovered = await discoverFallbackSelectors(page, criticalKey);
   const candidates = unique([

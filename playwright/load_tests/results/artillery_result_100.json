@@ -1,0 +1,72 @@
+{
+  "aggregate": {
+    "counters": {
+      "vusers.created_by_name.Health and stores": 435,
+      "vusers.created": 500,
+      "http.requests": 500,
+      "plugins.metrics-by-endpoint./api/v1/health.errors.ECONNREFUSED": 435,
+      "errors.ECONNREFUSED": 500,
+      "vusers.failed": 500,
+      "vusers.created_by_name.Compare quick cart": 65,
+      "plugins.metrics-by-endpoint./api/v1/compare.errors.ECONNREFUSED": 65
+    },
+    "rates": {
+      "http.request_rate": 95
+    },
+    "firstCounterAt": 1779277489002,
+    "lastCounterAt": 1779277494240,
+    "firstMetricAt": 1779277489002,
+    "lastMetricAt": 1779277494240,
+    "period": 1779277490000,
+    "summaries": {},
+    "histograms": {}
+  },
+  "intermediate": [
+    {
+      "counters": {
+        "vusers.created_by_name.Health and stores": 78,
+        "vusers.created": 88,
+        "http.requests": 88,
+        "plugins.metrics-by-endpoint./api/v1/health.errors.ECONNREFUSED": 78,
+        "errors.ECONNREFUSED": 88,
+        "vusers.failed": 88,
+        "vusers.created_by_name.Compare quick cart": 10,
+        "plugins.metrics-by-endpoint./api/v1/compare.errors.ECONNREFUSED": 10
+      },
+      "rates": {
+        "http.request_rate": 88
+      },
+      "http.request_rate": null,
+      "firstCounterAt": 1779277489002,
+      "lastCounterAt": 1779277489994,
+      "firstMetricAt": 1779277489002,
+      "lastMetricAt": 1779277489994,
+      "period": "1779277480000",
+      "summaries": {},
+      "histograms": {}
+    },
+    {
+      "counters": {
+        "vusers.created_by_name.Health and stores": 357,
+        "vusers.created": 412,
+        "http.requests": 412,
+        "plugins.metrics-by-endpoint./api/v1/health.errors.ECONNREFUSED": 357,
+        "errors.ECONNREFUSED": 412,
+        "vusers.failed": 412,
+        "vusers.created_by_name.Compare quick cart": 55,
+        "plugins.metrics-by-endpoint./api/v1/compare.errors.ECONNREFUSED": 55
+      },
+      "rates": {
+        "http.request_rate": 100
+      },
+      "http.request_rate": null,
+      "firstCounterAt": 1779277490001,
+      "lastCounterAt": 1779277494240,
+      "firstMetricAt": 1779277490001,
+      "lastMetricAt": 1779277494240,
+      "period": "1779277490000",
+      "summaries": {},
+      "histograms": {}
+    }
+  ]
+}

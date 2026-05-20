@@ -35,6 +35,7 @@ const ACTION_MAX_RETRIES = 2;
 const SUPPORTED_STRATEGIES = new Set(["cheapest", "best_per_kg", "best_per_l", "per_unit"]);
 const AUTH_STATE_PATH = "auth.json";
 const DEBUG_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123 Safari/537.36";
+const CDP_URL = process.env.PANIERBOT_CDP_URL || process.env.PLAYWRIGHT_CDP_URL || "http://localhost:9222";
 
 let actionRuntime = null;
 
@@ -651,8 +652,9 @@ async function main() {
   try {
     console.log("Mode debug Playwright activé");
     console.log("Mode Chrome réel activé via CDP");
+    console.log(`CDP target: ${CDP_URL}`);
 
-    browser = await chromium.connectOverCDP("http://localhost:9222");
+    browser = await chromium.connectOverCDP(CDP_URL);
 
     const contextOptions = {
       viewport: { width: 1280, height: 800 },

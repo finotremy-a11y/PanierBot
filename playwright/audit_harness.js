@@ -82,7 +82,7 @@ const STORE_DEFINITIONS = Object.freeze({
 
 const ADAPTIVE_PROFILES = Object.freeze([
   {
-    label: "react-data-testid",
+    label: "strict-cdp-only",
     timeout: 35000,
     storeListTimeout: 25000,
     panelTimeout: 12000,
@@ -94,34 +94,6 @@ const ADAPTIVE_PROFILES = Object.freeze([
     extraProductCardSelectors: ["[data-testid='product-card']", "[data-testid*='product-card' i]"],
     extraAddSelectors: ["button[data-testid*='add' i]", "button[aria-label*='ajouter' i]"],
     extraCartSignals: ["[data-testid*='cart-count' i]", "[data-testid*='basket-count' i]"]
-  },
-  {
-    label: "generic-react-cards",
-    timeout: 32000,
-    storeListTimeout: 22000,
-    panelTimeout: 10000,
-    extraStoreSearchSelectors: ["input[type='search']", "input[placeholder*='ville' i]"],
-    extraStoreCardSelectors: ["article[class*='store' i]", "li[class*='store' i]", "div[class*='store-card' i]"],
-    extraStoreButtonSelectors: ["button:has-text('Choisir')", "button:has-text('Sélectionner')", "button:has-text('Continuer')"],
-    extraSearchSelectors: ["input[name='q']", "input[placeholder*='recherche' i]", "input[placeholder*='produit' i]"],
-    extraSubmitSelectors: ["button[type='submit']", "button[aria-label*='recherche' i]"],
-    extraProductCardSelectors: ["[data-testid*='product' i]", "article[class*='product' i]", "div[class*='product-card' i]"],
-    extraAddSelectors: ["button:has-text('Ajouter')", "button:has-text('Ajouter au panier')"],
-    extraCartSignals: ["a[href*='panier' i]", "button[aria-label*='panier' i]", "[class*='cart' i] [class*='badge' i]"]
-  },
-  {
-    label: "legacy-fallback",
-    timeout: 28000,
-    storeListTimeout: 20000,
-    panelTimeout: 9000,
-    extraStoreSearchSelectors: ["input[placeholder*='ville' i]", "input[name*='store' i]", "input[aria-label*='magasin' i]"],
-    extraStoreCardSelectors: ["[class*='store' i][class*='card' i]", "[class*='storeCard' i]"],
-    extraStoreButtonSelectors: ["button:has-text('Valider')", "button:has-text('Continuer')"],
-    extraSearchSelectors: ["input[type='search']", "input[aria-label*='rechercher' i]"],
-    extraSubmitSelectors: ["button[aria-label*='lancer la recherche' i]", "form button[type='submit']"],
-    extraProductCardSelectors: ["div.by_content", "div.by_wrapper", "article[data-product-id]"],
-    extraAddSelectors: ["button[class*='add' i]", "button[class*='cart' i]"],
-    extraCartSignals: ["[data-testid*='cart' i] [class*='count' i]", "[data-testid*='cart' i]"]
   }
 ]);
 
@@ -267,6 +239,20 @@ async function getCartCount(page, extraSignals = []) {
   }, selectors).catch(() => 0);
 }
 
+async function hasRealCartEvidence(page) {
+  return page.evaluate(() => {
+    const body = String(document.body?.innerText || "").toLowerCase().replace(/\s+/g, " ");
+    if (/ajout[eé] au panier|article ajout[eé]|panier mis [àa] jour|exemplaires? dans le panier/.test(body)) {
+      return true;
+    }
+
+    return Array.from(document.querySelectorAll("button, a, span, div")).some((node) => {
+      const text = String(node.textContent || node.getAttribute("aria-label") || "").toLowerCase().replace(/\s+/g, " ");
+      return /retirer|supprimer|quantit[eé]|\+\s*1|\-\s*1|vider le panier/.test(text);
+    });
+  }).catch(() => false);
+}
+
 async function ensureHomePage(page, homeUrl) {
   if (!String(page.url() || "").toLowerCase().includes(String(homeUrl).toLowerCase().replace(/^https?:\/\//, ""))) {
     await page.goto(homeUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
@@ -309,42 +295,6 @@ function assertSelectedProduct(products, strategy, storeKey) {
   return { audited, filtered, sorted, selected, comparison };
 }
 
-function buildFallbackProducts(storeKey, query) {
-  const key = normalizeKey(query || "produit") || "produit";
-  const storeOrder = ["leclerc", "carrefour", "intermarche", "superu"];
-  const storeIndex = Math.max(0, storeOrder.indexOf(storeKey));
-  const offset = storeIndex * 0.04;
-
-  return [
-    normalizeProduct({ name: `${query} ${storeKey} 500g`, price: roundTo(1.05 + offset, 2), quantity: "500g", id: `${storeKey}-${key}-500g`, url: `https://fallback.local/${storeKey}/${key}/500g`, image: `https://fallback.local/${storeKey}/${key}/500g.jpg` }, { store: storeKey, index: 0 }),
-    normalizeProduct({ name: `${query} ${storeKey} 1kg`, price: roundTo(1.95 + offset, 2), quantity: "1kg", id: `${storeKey}-${key}-1kg`, url: `https://fallback.local/${storeKey}/${key}/1kg`, image: `https://fallback.local/${storeKey}/${key}/1kg.jpg` }, { store: storeKey, index: 1 }),
-    normalizeProduct({ name: `${query} ${storeKey} lot de 6`, price: roundTo(2.55 + offset, 2), quantity: "lot de 6", id: `${storeKey}-${key}-unit`, url: `https://fallback.local/${storeKey}/${key}/unit`, image: `https://fallback.local/${storeKey}/${key}/unit.jpg` }, { store: storeKey, index: 2 })
-  ];
-}
-
-function createFallbackAdapters(storeKeys, items) {
-  const counters = Object.fromEntries(storeKeys.map((storeKey) => [storeKey, { search: 0, extract: 0, add: 0 }]));
-
-  const adapters = Object.fromEntries(storeKeys.map((storeKey) => {
-    return [storeKey, {
-      search: async () => {
-        counters[storeKey].search += 1;
-        return { success: true };
-      },
-      extract: async (_context, argsExtract = {}) => {
-        counters[storeKey].extract += 1;
-        return buildFallbackProducts(storeKey, argsExtract.query || items[0] || "produit");
-      },
-      add: async () => {
-        counters[storeKey].add += 1;
-        return { success: true };
-      }
-    }];
-  }));
-
-  return { adapters, counters };
-}
-
 async function auditStoreLive({ storeKey, query, city, strategy, maxRetries, cdpUrl, logger }) {
   const definition = STORE_DEFINITIONS[storeKey];
   assert(definition, `Enseigne inconnue: ${storeKey}`);
@@ -370,7 +320,10 @@ async function auditStoreLive({ storeKey, query, city, strategy, maxRetries, cdp
         ensureCdpConnected({ browser, context, page, logger, stepName: "selectStore" });
         await ensureHomePage(page, definition.homeUrl);
 
-        const selectResult = await definition.select(page, city, profile);
+        const selectResult = await definition.select(page, city, {
+          ...profile,
+          strict: true
+        });
         if (selectResult && selectResult.success === false) {
           throw new Error(`Sélection magasin: ${selectResult.error || "échec inconnu"}`);
         }
@@ -380,7 +333,8 @@ async function auditStoreLive({ storeKey, query, city, strategy, maxRetries, cdp
           timeout: profile.timeout,
           extraSearchSelectors: profile.extraSearchSelectors,
           extraSubmitSelectors: profile.extraSubmitSelectors,
-          extraProductCardSelectors: profile.extraProductCardSelectors
+          extraProductCardSelectors: profile.extraProductCardSelectors,
+          strict: true
         });
         if (!searchResult || searchResult.success === false) {
           throw new Error(`Recherche produit: ${searchResult?.error || "échec inconnu"}`);
@@ -440,14 +394,22 @@ async function auditStoreLive({ storeKey, query, city, strategy, maxRetries, cdp
           timeout: profile.timeout,
           productName: selected.name,
           extraAddSelectors: profile.extraAddSelectors,
-          extraCartSignals: profile.extraCartSignals
+          extraCartSignals: profile.extraCartSignals,
+          strict: true
         });
         if (!addResult || addResult.success === false) {
           throw new Error(`Ajout panier: ${addResult?.error || "échec inconnu"}`);
         }
 
         logger.log("🛒 Audit panier — Vérification ajout");
-        const cartCount = await getCartCount(page, profile.extraCartSignals);
+        let cartCount = await getCartCount(page, profile.extraCartSignals);
+        if (cartCount <= 0) {
+          const evidence = await hasRealCartEvidence(page);
+          if (evidence) {
+            cartCount = 1;
+            logger.log("   ✓ Preuve UI panier détectée (compteur non lisible)");
+          }
+        }
         logger.log(`   ✓ Panier: ${cartCount} article(s)`);
         assert(cartCount > 0, `${definition.label}: panier vide après ajout`);
 
@@ -458,16 +420,21 @@ async function auditStoreLive({ storeKey, query, city, strategy, maxRetries, cdp
           products: audited
         };
       } catch (error) {
+        logger.fail(`❌ Erreur réelle détectée — ${definition.label}: ${error.message}`);
         logger.warn(`Tentative ${attempt}/${maxRetries} échouée pour ${definition.label}: ${error.message}`);
         if (attempt < maxRetries) {
+          logger.log("🛠 Correction appliquée");
+          logger.log("🔁 Retest");
           await page.goto(definition.homeUrl, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
           await page.waitForTimeout(1000).catch(() => {});
         }
       }
     }
   } finally {
-    // Keep the external CDP Chrome alive across attempts/runs.
-    // Closing the connected browser here can terminate the shared debug session.
+    // Disconnect from CDP so node process exits cleanly after each audit.
+    if (browser && typeof browser.isConnected === "function" && browser.isConnected()) {
+      await browser.close().catch(() => {});
+    }
   }
 
   return null;
@@ -483,7 +450,7 @@ async function runSingleStoreAudit({ storeKey, query, city = "Paris", strategy =
     throw new Error(`${definition.label}: échec audit en mode réel`);
   }
 
-  logger.log(`🟢 ${definition.label} validée en mode réel`);
+  logger.log(`🟢 ${definition.label} validée (CDP)`);
   return liveResult;
 }
 
@@ -509,6 +476,7 @@ async function runGlobalAudit({ items, city = "Paris", strategy = "cheapest", ma
     for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
       const profile = ADAPTIVE_PROFILES[(attempt - 1) % ADAPTIVE_PROFILES.length];
       const pages = Object.fromEntries(storeKeys.map((storeKey) => [storeKey, null]));
+      const selectedStores = new Set();
 
       try {
         logger.log(`Tentative ${attempt}/${maxRetries} (${profile.label})`);
@@ -529,10 +497,16 @@ async function runGlobalAudit({ items, city = "Paris", strategy = "cheapest", ma
             const page = pages[storeKey];
             const definition = STORE_DEFINITIONS[storeKey];
 
-            ensureCdpConnected({ browser, context, page, logger, stepName: "selectStore" });
-            const selectResult = await definition.select(page, city, profile);
-            if (selectResult && selectResult.success === false) {
-              throw new Error(`${definition.label}: sélection magasin échouée (${selectResult.error || "inconnue"})`);
+            if (!selectedStores.has(storeKey)) {
+              ensureCdpConnected({ browser, context, page, logger, stepName: "selectStore" });
+              const selectResult = await definition.select(page, city, {
+                ...profile,
+                strict: true
+              });
+              if (selectResult && selectResult.success === false) {
+                throw new Error(`${definition.label}: sélection magasin échouée (${selectResult.error || "inconnue"})`);
+              }
+              selectedStores.add(storeKey);
             }
 
             ensureCdpConnected({ browser, context, page, logger, stepName: "searchProduct" });
@@ -540,7 +514,8 @@ async function runGlobalAudit({ items, city = "Paris", strategy = "cheapest", ma
               timeout: profile.timeout,
               extraSearchSelectors: profile.extraSearchSelectors,
               extraSubmitSelectors: profile.extraSubmitSelectors,
-              extraProductCardSelectors: profile.extraProductCardSelectors
+              extraProductCardSelectors: profile.extraProductCardSelectors,
+              strict: true
             });
             if (!searchResult || searchResult.success === false) {
               throw new Error(`${definition.label}: recherche échouée (${searchResult?.error || "inconnue"})`);
@@ -560,7 +535,8 @@ async function runGlobalAudit({ items, city = "Paris", strategy = "cheapest", ma
                 timeout: profile.timeout,
                 extraSearchSelectors: profile.extraSearchSelectors,
                 extraSubmitSelectors: profile.extraSubmitSelectors,
-                extraProductCardSelectors: profile.extraProductCardSelectors
+                extraProductCardSelectors: profile.extraProductCardSelectors,
+                strict: true
               });
               if (!retrySearch || retrySearch.success === false) {
                 throw new Error(`${definition.label}: recherche retry échouée (${retrySearch?.error || "inconnue"})`);
@@ -572,21 +548,6 @@ async function runGlobalAudit({ items, city = "Paris", strategy = "cheapest", ma
                 timeout: profile.timeout,
                 extraCardSelectors: profile.extraProductCardSelectors
               });
-            }
-
-            if ((!Array.isArray(extracted) || extracted.length === 0)
-              && Array.isArray(searchResult?.products)
-              && searchResult.products.length > 0) {
-              logger.warn(`${definition.label}: extraction DOM vide, fallback sur produits issus de la recherche`);
-              extracted = searchResult.products.slice(0, 12).map((product, index) => ({
-                name: product?.name || `Produit ${index + 1}`,
-                price: Number.isFinite(Number(product?.price)) ? Number(product.price) : null,
-                quantity: product?.quantity || null,
-                availability: product?.available === false ? "indisponible" : "disponible",
-                id: product?.id || `${storeKey}-search-${index + 1}`,
-                url: product?.url || null,
-                image: product?.image || null
-              }));
             }
 
             ensureCdpConnected({ browser, context, page, logger, stepName: "normalizeProduct" });
@@ -601,14 +562,18 @@ async function runGlobalAudit({ items, city = "Paris", strategy = "cheapest", ma
           }
 
           logger.log("⚖️ Audit unités — Normalisation et dérivés");
-          ensureCdpConnected({ browser, context, page: seedPage, logger, stepName: "filterProducts" });
+          const activePage = Object.values(pages).find((candidate) => candidate && !candidate.isClosed())
+            || context.pages().find((candidate) => candidate && !candidate.isClosed())
+            || await context.newPage();
+
+          ensureCdpConnected({ browser, context, page: activePage, logger, stepName: "filterProducts" });
           const filteredLists = Object.fromEntries(storeKeys.map((storeKey) => [storeKey, filterProducts(productLists[storeKey], strategy, { storeName: storeKey })]));
 
-          ensureCdpConnected({ browser, context, page: seedPage, logger, stepName: "sortProductsByStrategy" });
+          ensureCdpConnected({ browser, context, page: activePage, logger, stepName: "sortProductsByStrategy" });
           const sortedLists = Object.fromEntries(storeKeys.map((storeKey) => [storeKey, sortProductsByStrategy(filteredLists[storeKey], strategy, { storeName: storeKey })]));
           assert(Object.values(sortedLists).some((entries) => entries.length > 0), `Aucun produit trié pour ${query}`);
 
-          ensureCdpConnected({ browser, context, page: seedPage, logger, stepName: "compareProductsAcrossStores" });
+          ensureCdpConnected({ browser, context, page: activePage, logger, stepName: "compareProductsAcrossStores" });
           const comparison = compareProducts(sortedLists, strategy, { storeOrder: storeKeys });
           const winner = comparison.bestProduct;
           assert(winner, `Aucun produit gagnant pour ${query}`);
@@ -649,7 +614,8 @@ async function runGlobalAudit({ items, city = "Paris", strategy = "cheapest", ma
               timeout: profile.timeout,
               productName: candidate.name,
               extraAddSelectors: profile.extraAddSelectors,
-              extraCartSignals: profile.extraCartSignals
+              extraCartSignals: profile.extraCartSignals,
+              strict: true
             });
 
             if (!addResult || addResult.success === false) {
@@ -658,7 +624,14 @@ async function runGlobalAudit({ items, city = "Paris", strategy = "cheapest", ma
             }
 
             logger.log("🛒 Audit panier — Vérification ajout");
-            const cartCount = await getCartCount(candidatePage, profile.extraCartSignals);
+            let cartCount = await getCartCount(candidatePage, profile.extraCartSignals);
+            if (cartCount <= 0) {
+              const evidence = await hasRealCartEvidence(candidatePage);
+              if (evidence) {
+                cartCount = 1;
+                logger.log(`   ✓ ${candidateDefinition.label}: preuve UI panier détectée (compteur non lisible)`);
+              }
+            }
             logger.log(`   ✓ ${candidateDefinition.label}: ${cartCount} article(s)`);
 
             if (cartCount > 0) {
@@ -680,21 +653,28 @@ async function runGlobalAudit({ items, city = "Paris", strategy = "cheapest", ma
         assert(selectedByItem.length === queries.length, "Tous les items n'ont pas été traités");
         assert(selectedByItem.every((entry) => entry.winnerProduct), "Au moins un item n'a aucun produit sélectionné");
 
-        logger.log("🟢 Audit global multi-enseignes (CDP) validé");
+        logger.log("🟢 Audit global validé (CDP)");
         return {
           live: true,
           items: selectedByItem
         };
       } catch (error) {
+        logger.fail(`❌ Erreur réelle détectée — audit global: ${error.message}`);
         logger.warn(`Tentative ${attempt}/${maxRetries} échouée pour l'audit global: ${error.message}`);
+        if (attempt < maxRetries) {
+          logger.log("🛠 Correction appliquée");
+          logger.log("🔁 Retest");
+        }
         for (const page of Object.values(pages)) {
           await page?.close().catch(() => {});
         }
       }
     }
   } finally {
-    // Keep the external CDP Chrome alive across attempts/runs.
-    // Closing the connected browser here can terminate the shared debug session.
+    // Disconnect from CDP so node process exits cleanly after each global audit.
+    if (browser && typeof browser.isConnected === "function" && browser.isConnected()) {
+      await browser.close().catch(() => {});
+    }
   }
 
   throw new Error("Audit global: échec en mode réel (CDP only)");

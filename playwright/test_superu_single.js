@@ -28,4 +28,4 @@ await runSingleStoreAudit({
 assertUnitNormalization();
 
 console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-console.log("🟢 Super U validée en mode réel\n");
+console.log("🟢 Super U validée (CDP)\n");

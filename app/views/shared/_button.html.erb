@@ -1,0 +1,44 @@
+<%#
+  Premium Button Component
+  Usage:
+    <%= render "shared/button", label: "Click me", variant: "primary", size: "md" %>
+    <%= render "shared/button", label: "Danger", variant: "danger", icon: "trash" %>
+    
+  Variants: primary, secondary, tertiary, success, danger
+  Sizes: sm, md (default), lg
+  Options: icon, disabled, full_width, href, data_*
+%>
+<% variant = variant || "primary" %>
+<% size = size || "md" %>
+<% tag_name = href.present? ? "a" : "button" %>
+<% class_variants = {
+  primary: "btn-primary",
+  secondary: "btn-secondary",
+  tertiary: "btn-tertiary",
+  success: "btn-success",
+  danger: "btn-danger"
+} %>
+<% class_sizes = {
+  sm: "btn-sm",
+  md: "",
+  lg: "btn-lg"
+} %>
+<% classes = "btn #{class_variants[variant.to_sym]} #{class_sizes[size.to_sym]}".strip %>
+<% classes += " w-full justify-center" if full_width %>
+<% classes += " opacity-50 cursor-not-allowed" if disabled %>
+
+<% if href.present? %>
+  <%= link_to href, class: classes, data: data_attrs do %>
+    <% if icon.present? %>
+      <%= render "shared/icon", name: icon, size: "sm" %>
+    <% end %>
+    <%= label %>
+  <% end %>
+<% else %>
+  <button type="<%= button_type || 'button' %>" class="<%= classes %>" <%= "disabled" if disabled %> <%= data_attrs&.map { |k, v| "data-#{k}=\"#{v}\"" }&.join(" ") %>>
+    <% if icon.present? %>
+      <%= render "shared/icon", name: icon, size: "sm" %>
+    <% end %>
+    <%= label %>
+  </button>
+<% end %>

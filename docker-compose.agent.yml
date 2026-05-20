@@ -1,0 +1,48 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    command: ["./bin/rails", "server", "-b", "0.0.0.0", "-p", "3000"]
+    environment:
+      RAILS_ENV: production
+      PANIERBOT_CDP_URL: http://agent-runner:9222
+    depends_on:
+      agent-runner:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/up"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  agent-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    command: ["node", "/rails/playwright/ops/watchdog.js"]
+    environment:
+      AGENT_LOG_DIR: /var/log/agent
+      CHROME_DEBUG_PORT: "9222"
+      PANIERBOT_CDP_URL: http://127.0.0.1:9222
+    ports:
+      - "9222:9222"
+    shm_size: "1gb"
+    restart: unless-stopped
+    volumes:
+      - agent_logs:/var/log/agent
+    healthcheck:
+      test: ["CMD", "node", "/rails/playwright/ops/healthcheck.js"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 45s
+
+volumes:
+  agent_logs:

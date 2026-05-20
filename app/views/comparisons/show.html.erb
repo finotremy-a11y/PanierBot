@@ -1,7 +1,7 @@
-<%# Comparisons results page %>
+<%# Premium comparison results page with accessibility & responsive -%>
 <% content_for :title, "Résultats — PanierBot" %>
 
-<%# Inject result_id for polling %>
+<%# Inject result_id for polling -%>
 <% result_id = params[:id] %>
 <% is_processing = @result.is_a?(Hash) && @result[:processing] %>
 <% is_success    = @result.is_a?(Hash) && @result[:success] %>
@@ -13,83 +13,94 @@
 <% comp_items    = Array(comparison[:items]).map { |i| i.is_a?(Hash) ? i.transform_keys(&:to_sym) : {} } %>
 <% optimal_cart  = comparison[:optimal_cart] || {} %>
 
-<div class="mx-auto max-w-4xl px-4 py-10 sm:px-6">
+<main class="mx-auto max-w-6xl px-4 py-6 sm:py-10 sm:px-6 lg:px-8">
+  <%# ── Breadcrumb / Back link ── %>
+  <nav class="mb-8 flex items-center gap-2 text-sm" aria-label="Chemin de navigation">
+    <%= link_to "Accueil", root_path, class: "text-slate-500 hover:text-indigo-600 transition-colors" %>
+    <span class="text-slate-300">/</span>
+    <span class="font-medium text-slate-900" aria-current="page">Résultats</span>
+  </nav>
 
-  <%# ── Back link ── %>
-  <div class="mb-6">
-    <%= link_to root_path, class: "inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-indigo-600 transition-colors" do %>
-      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
-      </svg>
-      Nouvelle comparaison
-    <% end %>
-  </div>
-
-  <%# ── Page header ── %>
-  <div class="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-    <div class="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 class="text-2xl font-extrabold text-slate-900">Résultats de comparaison</h1>
-        <div class="mt-2 flex flex-wrap gap-2">
-          <% if items.any? %>
-            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-              📦 <%= items.size %> produit<%= items.size > 1 ? "s" : "" %>
+  <%# ── Page header section ── %>
+  <div class="card-premium mb-8">
+    <div class="card-body">
+      <div class="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+        <div class="flex-1 min-w-0">
+          <h1 class="text-3xl font-extrabold text-slate-900 sm:text-4xl">
+            Résultats de comparaison
+          </h1>
+          
+          <%# Status badges -%>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <% if items.any? %>
+              <span class="badge badge-neutral">
+                📦 <%= items.size %> produit<%= items.size > 1 ? "s" : "" %>
+              </span>
+            <% end %>
+            <span class="badge badge-primary">
+              <%= mode == "multi_store" ? "🏪 Multi-enseignes" : "🏪 Mono-enseigne" %>
             </span>
+            <% strategy_label = { "cheapest" => "💰 Moins cher", "best_per_kg" => "⚖️ €/kg", "per_unit" => "🔢 €/u", "best_per_l" => "🥛 €/L" }[strategy] || strategy %>
+            <span class="badge" style="background-color: rgb(249, 240, 255); color: rgb(126, 34, 206); border: 1px solid rgb(243, 232, 255);">
+              <%= strategy_label %>
+            </span>
+          </div>
+
+          <%# Search terms -%>
+          <% if items.any? %>
+            <div class="mt-4 rounded-lg bg-slate-50 p-3 border border-slate-200">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-600">Articles recherchés</p>
+              <p class="mt-2 text-sm text-slate-700 line-clamp-2">
+                <%= items.map(&:capitalize).join(" • ") %>
+              </p>
+            </div>
           <% end %>
-          <span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-600 ring-1 ring-indigo-200">
-            <%= mode == "multi_store" ? "🏪 Multi-enseignes" : "🏪 Mono-enseigne" %>
-          </span>
-          <% strategy_label = { "cheapest" => "💰 Moins cher", "best_per_kg" => "⚖️ €/kg", "per_unit" => "🔢 €/u", "best_per_l" => "🥛 €/L" }[strategy] || strategy %>
-          <span class="rounded-full bg-violet-50 px-3 py-1 text-xs font-medium text-violet-600 ring-1 ring-violet-200">
-            <%= strategy_label %>
-          </span>
         </div>
-        <% if items.any? %>
-          <p class="mt-3 text-sm text-slate-600">
-            <span class="font-medium">Produits recherchés:</span>
-            <%= items.map(&:capitalize).join(", ") %>
-          </p>
-        <% end %>
+
+        <%# Action button -%>
+        <div class="flex-shrink-0">
+          <%= link_to root_path, class: "btn btn-secondary btn-lg inline-flex items-center gap-2" do %>
+            <%= render "shared/icon", name: "arrow-left", size: "sm" %>
+            <span>Nouvelle recherche</span>
+          <% end %>
+        </div>
       </div>
-      <%= link_to root_path,
-          class: "inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-indigo-300 transition-all" do %>
-        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-        </svg>
-        Relancer
-      <% end %>
     </div>
   </div>
 
   <%# ── Results area (pollable via Turbo) ── %>
-  <div id="comparison-results">
+  <div id="comparison-results" role="region" aria-live="polite" aria-label="Résultats de comparaison">
 
     <% if is_processing %>
       <%# ── Processing state ── %>
-      <div class="rounded-2xl border border-indigo-200 bg-indigo-50 p-8"
+      <div class="card-premium ring-2 ring-indigo-200"
            data-controller="compare"
            data-compare-polling-url-value="<%= status_comparison_path(result_id) %>"
            data-compare-redirect-url-value="<%= comparison_path(result_id) %>"
            data-compare-auto-poll-value="true">
-        <div class="flex flex-col items-center gap-4 text-center">
-          <%= render "shared/loading_spinner", message: "Analyse des prix en cours…" %>
-          <p class="max-w-sm text-sm text-slate-600">
-            PanierBot visite les drives en temps réel. Selon votre liste,
-            cela peut prendre <strong>1 à 3 minutes</strong>. Ne fermez pas cette page.
-          </p>
-          <div class="mt-2 flex flex-wrap justify-center gap-2 text-xs text-slate-500">
-            <span class="flex items-center gap-1">
-              <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500"></span> Leclerc
-            </span>
-            <span class="flex items-center gap-1">
-              <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" style="animation-delay:0.3s"></span> Carrefour
-            </span>
-            <span class="flex items-center gap-1">
-              <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-orange-500" style="animation-delay:0.6s"></span> Intermarché
-            </span>
-            <span class="flex items-center gap-1">
-              <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" style="animation-delay:0.9s"></span> Super U
-            </span>
+        <div class="card-body">
+          <%= render "shared/loading_spinner", 
+              message: "Analyse des prix en cours…",
+              help_text: "PanierBot visite les drives en temps réel. Selon votre liste, cela peut prendre 1 à 3 minutes. Ne fermez pas cette page." %>
+          
+          <%# Store indicators -%>
+          <div class="mt-6 flex flex-wrap justify-center gap-4 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500"></span>
+              <span class="text-slate-600">E.Leclerc</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="inline-block h-2 w-2 animate-pulse rounded-full bg-red-500" style="animation-delay:0.3s"></span>
+              <span class="text-slate-600">Carrefour</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="inline-block h-2 w-2 animate-pulse rounded-full bg-orange-500" style="animation-delay:0.6s"></span>
+              <span class="text-slate-600">Intermarché</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500" style="animation-delay:0.9s"></span>
+              <span class="text-slate-600">Super U</span>
+            </div>
           </div>
         </div>
       </div>
@@ -99,8 +110,9 @@
       <div class="space-y-4">
         <%= render "shared/error_banner", errors: Array(@result[:errors]) %>
         <div class="text-center">
-          <%= link_to root_path, class: "inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-indigo-700 transition-colors" do %>
-            Réessayer
+          <%= link_to root_path, class: "btn btn-primary btn-lg" do %>
+            <%= render "shared/icon", name: "arrow-left", size: "sm" %>
+            <span>Réessayer</span>
           <% end %>
         </div>
       </div>
@@ -108,7 +120,7 @@
     <% elsif is_success %>
       <%# ── Success state ── %>
 
-      <%# Optimal cart banner %>
+      <%# Optimal cart banner -%>
       <% if optimal_cart.present? && optimal_cart.is_a?(Hash) %>
         <div class="mb-8">
           <%= render "comparisons/optimal_cart",
@@ -117,51 +129,65 @@
         </div>
       <% end %>
 
-      <%# Product cards grid %>
+      <%# Product cards grid -%>
       <% if comp_items.any? %>
-        <div class="mb-4 flex items-center justify-between">
-          <h2 class="text-lg font-bold text-slate-900">Détail par produit</h2>
-          <span class="text-sm text-slate-500"><%= comp_items.size %> résultat<%= comp_items.size > 1 ? "s" : "" %></span>
+        <div class="mb-6">
+          <div class="flex items-center justify-between">
+            <h2 class="text-2xl font-bold text-slate-900">Détail par produit</h2>
+            <span class="text-sm font-medium text-slate-500" role="status">
+              <%= comp_items.size %> résultat<%= comp_items.size > 1 ? "s" : "" %>
+            </span>
+          </div>
         </div>
-        <div class="grid gap-4 sm:grid-cols-2">
-          <% comp_items.each do |item| %>
+        <div class="grid gap-4 auto-rows-max sm:grid-cols-2 lg:grid-cols-3">
+          <% comp_items.each_with_index do |item, idx| %>
             <%= render "comparisons/product_card", item: item %>
           <% end %>
         </div>
 
-      <%# Fallback: single-store result (from CartBuilder) %>
+      <%# Fallback: single-store result (from CartBuilder) -%>
       <% elsif @result[:url].present? || @result[:details].present? %>
-        <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 class="text-base font-bold text-slate-900">Panier prêt</h2>
-          <% if @result[:url].present? %>
-            <p class="mt-3">
-              <a href="<%= @result[:url] %>" target="_blank" rel="noopener noreferrer"
-                 class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors">
-                Ouvrir le panier ↗
-              </a>
-            </p>
-          <% end %>
-          <% details = (@result[:details] || {}).is_a?(Hash) ? @result[:details].transform_keys(&:to_sym) : {} %>
-          <% if details[:addedCount].present? %>
-            <p class="mt-3 text-sm text-slate-600">
-              Produits ajoutés: <strong><%= details[:addedCount] %></strong> / <strong><%= details[:requestedCount] || items.size %></strong>
-            </p>
-          <% end %>
-          <% Array(details[:notFoundItems]).each do |nf| %>
-            <p class="mt-1 text-sm text-amber-700">— Non trouvé: <%= nf %></p>
-          <% end %>
+        <div class="card">
+          <div class="card-body">
+            <h2 class="text-xl font-bold text-slate-900">✅ Panier prêt</h2>
+            <% if @result[:url].present? %>
+              <p class="mt-4">
+                <a href="<%= @result[:url] %>" target="_blank" rel="noopener noreferrer"
+                   class="btn btn-primary inline-flex items-center gap-2">
+                  <%= render "shared/icon", name: "arrow-right", size: "sm" %>
+                  <span>Ouvrir le panier</span>
+                </a>
+              </p>
+            <% end %>
+            <% details = (@result[:details] || {}).is_a?(Hash) ? @result[:details].transform_keys(&:to_sym) : {} %>
+            <% if details[:addedCount].present? %>
+              <div class="mt-4 rounded-lg bg-emerald-50 p-3 border border-emerald-200">
+                <p class="text-sm text-emerald-900">
+                  <strong><%= details[:addedCount] %></strong> produit<%= details[:addedCount] != 1 ? "s" : "" %> ajouté<%= details[:addedCount] != 1 ? "s" : "" %> 
+                  sur <strong><%= details[:requestedCount] || items.size %></strong>
+                </p>
+              </div>
+            <% end %>
+            <% Array(details[:notFoundItems]).each do |nf| %>
+              <div class="mt-2 text-sm text-amber-700">❌ Non trouvé : <%= nf %></div>
+            <% end %>
+          </div>
         </div>
       <% end %>
 
     <% else %>
-      <%# Unknown state %>
-      <div class="rounded-2xl border border-slate-200 bg-white p-8 text-center">
-        <p class="text-slate-500">Résultat indisponible ou expiré.</p>
-        <%= link_to "Nouvelle comparaison", root_path,
-            class: "mt-4 inline-flex items-center rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors" %>
+      <%# ── Unknown/expired state ── %>
+      <div class="card text-center">
+        <div class="card-body">
+          <p class="text-lg text-slate-600 mb-4">⏱️ Résultat indisponible ou expiré</p>
+          <p class="text-sm text-slate-500 mb-6">Veuillez relancer une nouvelle comparaison.</p>
+          <%= link_to "Nouvelle comparaison", root_path,
+              class: "btn btn-primary btn-lg" %>
+        </div>
       </div>
     <% end %>
 
   </div><%# /comparison-results %>
 
-</div>
+</main>
+

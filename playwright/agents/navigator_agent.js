@@ -10,7 +10,7 @@
  * - memory of successful selectors per store/session
  */
 
-import { retry, isRetriableError } from "./retry.js";
+import { retry, isRetriableError } from "../retry.js";
 
 const ACTIONS = Object.freeze({
   SEARCH: "search",
@@ -1497,6 +1497,77 @@ async function extractLeclercProductDetails(page, options = {}) {
 }
 
 async function addLeclercToCart(page, index = 1, options = {}) {
+  const strictMode = options.strict === true;
+  const targetName = String(options.productName || "").trim();
+  const targetIndex = Math.max(1, Number(index) || 1);
+
+  const normalizeText = (value) => String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+  const targetTokens = normalizeText(targetName).split(" ").filter((word) => word.length >= 4).slice(0, 5);
+
+  const directAdd = await page.evaluate(({ wantedIndex, tokens }) => {
+    const clean = (value) => String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+    const isVisible = (node) => {
+      if (!(node instanceof HTMLElement)) return false;
+      const style = window.getComputedStyle(node);
+      if (style.display === "none" || style.visibility === "hidden") return false;
+      const rect = node.getBoundingClientRect();
+      return rect.width > 3 && rect.height > 3;
+    };
+    const dispatchClick = (node) => {
+      if (!node) return false;
+      try {
+        node.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
+        node.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+        node.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+        node.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+        if (typeof node.click === "function") node.click();
+        return true;
+      } catch (_) {
+        return false;
+      }
+    };
+
+    const controls = Array.from(document.querySelectorAll("button, a"))
+      .filter(isVisible)
+      .filter((node) => /ajouter au panier|ajouter/i.test(String(node.textContent || "") + " " + String(node.getAttribute("aria-label") || "")));
+
+    if (!controls.length) {
+      return { clicked: false, reason: "no_add_control" };
+    }
+
+    const ranked = controls.map((control, idx) => {
+      const card = control.closest("li, article, section, div") || control.parentElement;
+      const cardTextRaw = (card?.textContent || control.textContent || "").replace(/\s+/g, " ").trim();
+      const cardText = clean(cardTextRaw);
+      const score = tokens.length > 0 ? tokens.filter((token) => cardText.includes(token)).length : 0;
+      return { control, idx, score, text: cardTextRaw.slice(0, 180) };
+    }).sort((a, b) => b.score - a.score);
+
+    const chosen = (tokens.length > 0 && ranked[0].score > 0)
+      ? ranked[0]
+      : ranked[Math.min(Math.max(wantedIndex - 1, 0), ranked.length - 1)];
+
+    const clicked = dispatchClick(chosen.control);
+    return {
+      clicked,
+      reason: clicked ? "direct_card_add" : "dispatch_failed",
+      selectedText: chosen.text
+    };
+  }, { wantedIndex: targetIndex, tokens: targetTokens }).catch((error) => ({ clicked: false, reason: `evaluate_error:${error.message}` }));
+
+  if (directAdd.clicked) {
+    logger.push("addLeclercToCart:direct_card_add");
+    return { success: true, selector: "__leclerc_direct_card_add__", error: null };
+  }
+
+  if (strictMode) {
+    return {
+      success: false,
+      selector: null,
+      error: `Ajout panier Leclerc direct impossible (${directAdd.reason || "unknown"})`
+    };
+  }
+
   const selection = await selectProduct(page, index, options);
   if (!selection.success) {
     return selection;
@@ -2235,6 +2306,7 @@ const LECLERC_ARROW_SELECTORS = [
 ];
 
 const LECLERC_PRODUCT_SEARCH_SELECTORS = [
+  "#txtRecherche",
   "#inputWRSL301_rechercheTexte",
   "input[id*='recherche' i][id*='texte' i]",
   "input[name='q']",
@@ -2833,6 +2905,7 @@ async function selectLeclercDriveArrow(page, options = {}) {
   const city = String(options.city || "Paris").trim() || "Paris";
   const storeListTimeout = Number(options.storeListTimeout) || 20000;
   const panelTimeout = Number(options.panelTimeout) || 8000;
+  const strictMode = options.strict === true;
 
   // Build a combined selector covering all arrow candidates.
   const combinedListSelector = LECLERC_ARROW_SELECTORS.join(", ");
@@ -2968,6 +3041,12 @@ async function selectLeclercDriveArrow(page, options = {}) {
   }
 
   if (!resolvedSelector) {
+    if (strictMode) {
+      const msg = `Aucune flèche de magasin détectée dans le DOM (${combinedListSelector})`;
+      logger.push("selectLeclercDriveArrow:no_arrow_found");
+      return { success: false, selector: null, error: msg };
+    }
+
     try {
       const domCandidate = await page.evaluate(() => {
         const texts = ["choisir ce drive", "choisir", "continuer", "mon magasin", "drive"];
@@ -3048,6 +3127,12 @@ async function selectLeclercDriveArrow(page, options = {}) {
     console.log(`🖱️  Clic effectué sur : ${firstArrowSelector}`);
     logger.push(`selectLeclercDriveArrow:click_done selector=${firstArrowSelector}`);
   } catch (clickErr) {
+    if (strictMode) {
+      const msg = `Clic échoué : ${clickErr.message}`;
+      logger.push(`selectLeclercDriveArrow:click_failed ${msg}`);
+      return { success: false, selector: firstArrowSelector, error: msg };
+    }
+
     // ── Step 3b : fallback – force click via JS evaluate ──────────────────────
     logger.push(`selectLeclercDriveArrow:click_failed fallback_js_click ${clickErr.message}`);
     try {
@@ -3103,6 +3188,12 @@ async function selectLeclercDriveArrow(page, options = {}) {
     logger.push("selectLeclercDriveArrow:panel_open");
     return { success: true, selector: firstArrowSelector, error: null };
   } catch (panelErr) {
+    if (strictMode) {
+      const msg = `Panneau de détail non détecté après ${panelTimeout}ms : ${panelErr.message}`;
+      logger.push(`selectLeclercDriveArrow:panel_not_opened ${msg}`);
+      return { success: false, selector: firstArrowSelector, error: msg };
+    }
+
     // Panel may have a slightly different text – try a broader fallback
     try {
       await page.waitForFunction(() => {
@@ -3955,6 +4046,31 @@ async function searchProduct(page, query, options = {}) {
     const safeQuery = String(query || "").trim();
     const timeout = Number(options.timeout) || 20000;
     const retriedAfterDriveSelection = options.retriedAfterDriveSelection === true;
+    const strictMode = options.strict === true;
+
+    const resolveLeclercCatalogPage = async (candidatePage) => {
+      const pages = [candidatePage, ...(candidatePage.context?.().pages?.() || [])].filter(Boolean);
+
+      for (const currentPage of pages) {
+        const url = String(currentPage.url() || "");
+        if (/fd4-courses\.leclercdrive\.fr/i.test(url)) {
+          return currentPage;
+        }
+
+        const selector = await waitAnySelector(currentPage, LECLERC_PRODUCT_SEARCH_SELECTORS, 800).catch(() => null);
+        if (selector) {
+          return currentPage;
+        }
+      }
+
+      return candidatePage;
+    };
+
+    const resolvedLeclercPage = await resolveLeclercCatalogPage(page);
+    if (resolvedLeclercPage && resolvedLeclercPage !== page) {
+      await page.goto(resolvedLeclercPage.url(), { waitUntil: "domcontentloaded", timeout });
+      await page.waitForLoadState("domcontentloaded", { timeout: 15000 }).catch(() => {});
+    }
     if (!safeQuery) {
       return { success: false, query: safeQuery, selector: null, products: [], error: "Requête produit vide" };
     }
@@ -3985,6 +4101,16 @@ async function searchProduct(page, query, options = {}) {
 
   const inputSelector = await waitAnySelector(page, LECLERC_PRODUCT_SEARCH_SELECTORS, Math.min(timeout, 12000));
   if (!inputSelector) {
+    if (strictMode) {
+      return {
+        success: false,
+        query: safeQuery,
+        selector: null,
+        products: [],
+        error: "Champ de recherche produit introuvable"
+      };
+    }
+
     try {
       const storeInput = page.locator("#wpad-recherche-magasin-input").first();
       if (await storeInput.count() > 0 && await storeInput.isVisible({ timeout: 250 })) {
@@ -4036,7 +4162,8 @@ async function searchProduct(page, query, options = {}) {
     try {
       await selectLeclercDriveArrow(page, {
         storeListTimeout: Math.min(timeout, 20000),
-        panelTimeout: Math.min(timeout, 12000)
+        panelTimeout: Math.min(timeout, 12000),
+        strict: strictMode
       });
       await page.waitForTimeout(1200);
     } catch (_) {
@@ -4108,14 +4235,34 @@ async function searchProduct(page, query, options = {}) {
     const submitSelector = await waitAnySelector(page, LECLERC_PRODUCT_SUBMIT_SELECTORS, 2000);
     try {
       await page.keyboard.press("Enter");
-    } catch (_) {
+    } catch (err) {
+      if (strictMode) {
+        return {
+          success: false,
+          query: safeQuery,
+          selector: inputSelector,
+          products: [],
+          error: `Validation de recherche échouée: ${err.message}`
+        };
+      }
+
       // fall through to explicit submit handling below
     }
 
     if (submitSelector) {
       try {
         await page.click(submitSelector, { timeout: 3000, force: true });
-      } catch (_) {
+      } catch (err) {
+        if (strictMode) {
+          return {
+            success: false,
+            query: safeQuery,
+            selector: inputSelector,
+            products: [],
+            error: `Soumission de recherche échouée: ${err.message}`
+          };
+        }
+
         await targetInput.evaluate((element) => {
           const form = element?.closest?.("form");
           if (form && typeof form.requestSubmit === "function") {
@@ -4127,7 +4274,7 @@ async function searchProduct(page, query, options = {}) {
           }
         }).catch(() => {});
       }
-    } else {
+    } else if (!strictMode) {
       await targetInput.evaluate((element) => {
         const form = element?.closest?.("form");
         if (form && typeof form.requestSubmit === "function") {
@@ -4184,7 +4331,11 @@ async function searchProduct(page, query, options = {}) {
 async function selectProduct(page, index = 1, options = {}) {
   const timeout = Number(options.timeout) || 12000;
   const targetIndex = Math.max(1, Number(index) || 1);
+  const targetName = String(options.productName || "").trim();
   logger.push(`selectProduct:start index=${targetIndex}`);
+
+  const normalizeText = (value) => String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+  const targetTokens = normalizeText(targetName).split(" ").filter((word) => word.length >= 4).slice(0, 4);
 
   const cardSelector = await waitAnySelector(page, LECLERC_PRODUCT_CARD_SELECTORS, timeout);
   if (!cardSelector) {
@@ -4202,6 +4353,16 @@ async function selectProduct(page, index = 1, options = {}) {
     for (let i = 0; i < count; i++) {
       const txt = ((await cards.nth(i).textContent()) || "").replace(/\s+/g, " ").trim();
       if (!txt) continue;
+      const normalizedText = normalizeText(txt);
+      if (/sponsorise|voir le rayon/.test(normalizedText)) {
+        continue;
+      }
+      if (targetTokens.length > 0) {
+        const matchedTokens = targetTokens.filter((token) => normalizedText.includes(token)).length;
+        if (matchedTokens === 0) {
+          continue;
+        }
+      }
       if (/1\.\s*je\s+saisis|2\.\s*je\s+commande|3\.\s*mes\s+courses|rayons|promotions|nos bons plans/i.test(txt)) {
         continue;
       }
@@ -4214,7 +4375,9 @@ async function selectProduct(page, index = 1, options = {}) {
       return { success: false, selector: cardSelector, index: targetIndex, error: "Aucune carte produit valide détectée" };
     }
 
-    const chosenIndex = candidateIndexes[Math.min(targetIndex - 1, candidateIndexes.length - 1)];
+    const chosenIndex = targetTokens.length > 0
+      ? candidateIndexes[0]
+      : candidateIndexes[Math.min(targetIndex - 1, candidateIndexes.length - 1)];
     const chosen = cards.nth(chosenIndex);
     const cardText = ((await chosen.textContent()) || "").replace(/\s+/g, " ").trim();
     await chosen.click({ timeout: 5000 });
@@ -4245,6 +4408,7 @@ async function selectProduct(page, index = 1, options = {}) {
 async function addToCart(page, options = {}) {
   return runWithIntelligentRetry("addToCart", options, async () => {
     const timeout = Number(options.timeout) || 15000;
+    const strictMode = options.strict === true;
     logger.push("addToCart:start");
 
   const beforeCount = await snapshotCartCount(page);
@@ -4262,26 +4426,28 @@ async function addToCart(page, options = {}) {
   }
 
   // Handle quantity/format prompts if they appear.
-  const quantityFallbacks = [
-    "button[aria-label*='fermer la fenêtre modale' i]",
-    "button[aria-label*='fermer' i]",
-    "button:has-text('Continuer')",
-    "button:has-text('Valider')",
-    "button:has-text('Confirmer')",
-    "button:has-text('OK')",
-    "button:has-text('Ajouter')",
-    "button:has-text('Fermer')"
-  ];
+  if (!strictMode) {
+    const quantityFallbacks = [
+      "button[aria-label*='fermer la fenêtre modale' i]",
+      "button[aria-label*='fermer' i]",
+      "button:has-text('Continuer')",
+      "button:has-text('Valider')",
+      "button:has-text('Confirmer')",
+      "button:has-text('OK')",
+      "button:has-text('Ajouter')",
+      "button:has-text('Fermer')"
+    ];
 
-  for (const sel of quantityFallbacks) {
-    try {
-      const btn = page.locator(sel).first();
-      if (await btn.count() > 0 && await btn.isVisible({ timeout: 250 })) {
-        await btn.click({ timeout: 1500 });
-        break;
+    for (const sel of quantityFallbacks) {
+      try {
+        const btn = page.locator(sel).first();
+        if (await btn.count() > 0 && await btn.isVisible({ timeout: 250 })) {
+          await btn.click({ timeout: 1500 });
+          break;
+        }
+      } catch (_) {
+        // ignore optional prompt
       }
-    } catch (_) {
-      // ignore optional prompt
     }
   }
 
@@ -4724,6 +4890,7 @@ async function selectCarrefourStore(page, city, options = {}) {
 async function searchCarrefourProduct(page, query, options = {}) {
   const safeQuery = String(query || "").trim();
   const timeout = Math.max(6000, Number(options.timeout) || 20000);
+  const strictMode = options.strict === true;
   const extraSearchSelectors = Array.isArray(options.extraSearchSelectors)
     ? options.extraSearchSelectors
     : [];
@@ -4810,7 +4977,17 @@ async function searchCarrefourProduct(page, query, options = {}) {
     try {
       await page.keyboard.press("Enter");
       submitted = true;
-    } catch (_) {
+    } catch (err) {
+      if (strictMode) {
+        return {
+          success: false,
+          query: safeQuery,
+          selector: inputSelector,
+          productsCount: 0,
+          error: `Validation de la recherche Carrefour impossible: ${err.message}`
+        };
+      }
+
       // fallback to submit button
     }
 
@@ -5406,6 +5583,8 @@ async function selectIntermarcheStore(page, city, options = {}) {
     const hasSelectedSignal = selectedSignals.some((selector) => hasVisibleSelector(selector));
     const hasSearchInput = searchSelectors.some((selector) => hasVisibleSelector(selector));
     const hasChooserCta = bodyText.includes("choisir mon magasin") || bodyText.includes("choisir votre magasin");
+    const url = String(window.location.href || "").toLowerCase();
+    const hasCatalogUrl = url.includes("/recherche") || url.includes("courses-en-ligne") || url.includes("/drive") || url.includes("/accueil");
     const city = lower(cityValue || "");
     const hasCityContext = city.length > 0 && bodyText.includes(city);
 
@@ -5414,6 +5593,7 @@ async function selectIntermarcheStore(page, city, options = {}) {
       hasSelectedSignal,
       hasSearchInput,
       hasChooserCta,
+      hasCatalogUrl,
       hasCityContext
     };
   }, INTERMARCHE_STORE_SEARCH_SELECTORS, INTERMARCHE_SELECTED_STORE_SIGNALS, INTERMARCHE_SEARCH_INPUT_SELECTORS, safeCity).catch(() => ({
@@ -5421,11 +5601,13 @@ async function selectIntermarcheStore(page, city, options = {}) {
     hasSelectedSignal: false,
     hasSearchInput: false,
     hasChooserCta: true,
+    hasCatalogUrl: false,
     hasCityContext: false
   }));
 
   const treatAsAlreadySelected = alreadySelectedState.hasSelectedSignal
-    || (!alreadySelectedState.hasStoreInput && !alreadySelectedState.hasChooserCta && (alreadySelectedState.hasSearchInput || alreadySelectedState.hasCityContext));
+    || (!alreadySelectedState.hasStoreInput && !alreadySelectedState.hasChooserCta
+      && (alreadySelectedState.hasSearchInput || alreadySelectedState.hasCityContext || alreadySelectedState.hasCatalogUrl));
 
   if (treatAsAlreadySelected) {
     console.log(`📦 Intermarché magasin déjà sélectionné: ${safeCity}`);
@@ -5825,6 +6007,7 @@ async function selectIntermarcheStore(page, city, options = {}) {
 async function searchIntermarcheProduct(page, query, options = {}) {
   const safeQuery = String(query || "").trim();
   const timeout = Math.max(6000, Number(options.timeout) || 20000);
+  const strictMode = options.strict === true;
   const extraSearchSelectors = Array.isArray(options.extraSearchSelectors)
     ? options.extraSearchSelectors
     : [];
@@ -5958,7 +6141,17 @@ async function searchIntermarcheProduct(page, query, options = {}) {
         try {
           await page.keyboard.press("Enter");
           submitted = true;
-        } catch (_) {
+        } catch (err) {
+          if (strictMode) {
+            return {
+              success: false,
+              query: safeQuery,
+              selector: inputSelector,
+              productsCount: 0,
+              error: `Validation de recherche Intermarché impossible: ${err.message}`
+            };
+          }
+
           // submit fallback below
         }
 
@@ -5984,6 +6177,16 @@ async function searchIntermarcheProduct(page, query, options = {}) {
   }
 
   if (!usedSelector) {
+    if (strictMode) {
+      return {
+        success: false,
+        query: safeQuery,
+        selector: null,
+        productsCount: 0,
+        error: "Barre de recherche Intermarché introuvable"
+      };
+    }
+
     const domFallback = await page.evaluate((queryValue) => {
       const clean = (value) => String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
       const isVisible = (node) => {
@@ -6336,6 +6539,7 @@ async function extractIntermarcheProductDetails(page, options = {}) {
 async function addIntermarcheToCart(page, index = 1, options = {}) {
   const timeout = Math.max(5000, Number(options.timeout) || 15000);
   const targetIndex = Math.max(1, Number(index) || 1);
+  const strictMode = options.strict === true;
   const extraAddSelectors = Array.isArray(options.extraAddSelectors)
     ? options.extraAddSelectors
     : [];
@@ -6453,12 +6657,14 @@ async function addIntermarcheToCart(page, index = 1, options = {}) {
     };
   }
 
-  await safeClick(page, [
-    "button:has-text('Continuer')",
-    "button:has-text('Valider')",
-    "button:has-text('Confirmer')",
-    "button:has-text('OK')"
-  ], "confirmation ajout Intermarché");
+  if (!strictMode) {
+    await safeClick(page, [
+      "button:has-text('Continuer')",
+      "button:has-text('Valider')",
+      "button:has-text('Confirmer')",
+      "button:has-text('OK')"
+    ], "confirmation ajout Intermarché");
+  }
 
   let updated = false;
   const deadline = Date.now() + timeout;
@@ -6585,6 +6791,7 @@ async function snapshotSuperUCartCount(page, extraSignals = []) {
 async function selectSuperUStore(page, city, options = {}) {
   const safeCity = String(city || "").trim();
   const timeout = Math.max(6000, Number(options.timeout) || 30000);
+  const strictMode = options.strict === true;
 
   if (!safeCity) {
     return { success: false, city: safeCity, storeName: null, error: "Ville invalide" };
@@ -6724,6 +6931,15 @@ async function selectSuperUStore(page, city, options = {}) {
   // Click the "Choose store" button
   const chooseButtonFound = await safeClick(page, SUPERU_STORE_BUTTON_SELECTORS, "bouton choisir magasin");
   if (!chooseButtonFound) {
+    if (strictMode) {
+      return {
+        success: false,
+        city: safeCity,
+        storeName: null,
+        error: "Bouton choisir magasin Super U introuvable"
+      };
+    }
+
     logger.push(`selectSuperUStore:choose_button_not_found trying_fallback`);
     await page.waitForTimeout(1000);
   }
@@ -6761,6 +6977,7 @@ async function selectSuperUStore(page, city, options = {}) {
 async function searchSuperUProduct(page, query, options = {}) {
   const safeQuery = String(query || "").trim();
   const timeout = Number(options.timeout) || 20000;
+  const strictMode = options.strict === true;
 
   if (!safeQuery) {
     return { success: false, query: safeQuery, selector: null, products: [], error: "Requête produit vide" };
@@ -6829,6 +7046,10 @@ async function searchSuperUProduct(page, query, options = {}) {
     try {
       await targetInput.click({ timeout: 5000 });
     } catch (_) {
+      if (strictMode) {
+        throw new Error("Clic sur le champ de recherche Super U impossible");
+      }
+
       await dismissSuperUOverlays(page);
       await dismissBlockingOverlays(page);
       await targetInput.click({ timeout: 5000, force: true });
@@ -6837,7 +7058,11 @@ async function searchSuperUProduct(page, query, options = {}) {
     await targetInput.type(safeQuery, { delay: 40 });
     try {
       await page.keyboard.press("Enter");
-    } catch (_) {
+    } catch (err) {
+      if (strictMode) {
+        throw err;
+      }
+
       const submitSelector = await waitAnySelector(page, SUPERU_SEARCH_SUBMIT_SELECTORS, 2000);
       if (submitSelector) {
         await page.click(submitSelector, { timeout: 3000 });
@@ -7112,6 +7337,7 @@ async function addSuperUToCart(page, index = 1, options = {}) {
   const timeout = Number(options.timeout) || 15000;
   const targetIndex = Math.max(1, Number(index) || 1);
   const targetName = String(options.productName || "").trim();
+  const strictMode = options.strict === true;
   let addSelector = null;
   let nameTargetClicked = false;
   logger.push(`addSuperUToCart:start index=${targetIndex}`);
@@ -7179,6 +7405,15 @@ async function addSuperUToCart(page, index = 1, options = {}) {
   }, targetIndex).catch(() => ({ clicked: false, reason: "evaluate_failed" }));
 
   if (!targetedClick.clicked) {
+    if (strictMode) {
+      return {
+        success: false,
+        index: targetIndex,
+        selector: null,
+        error: "Bouton Ajouter au panier Super U introuvable"
+      };
+    }
+
     addSelector = await waitAnySelector(page, SUPERU_ADD_TO_CART_SELECTORS, timeout);
     if (!addSelector) {
       return { success: false, selector: null, error: "Bouton Ajouter au panier introuvable" };
@@ -7213,23 +7448,25 @@ async function addSuperUToCart(page, index = 1, options = {}) {
   logger.push(`addSuperUToCart:targeted=${targetedClick.clicked}`);
 
   // Handle quantity/format prompts if they appear
-  const quantityFallbacks = [
-    "button:has-text('Continuer')",
-    "button:has-text('Valider')",
-    "button:has-text('Confirmer')",
-    "button:has-text('OK')",
-    "button:has-text('Ajouter')"
-  ];
+  if (!strictMode) {
+    const quantityFallbacks = [
+      "button:has-text('Continuer')",
+      "button:has-text('Valider')",
+      "button:has-text('Confirmer')",
+      "button:has-text('OK')",
+      "button:has-text('Ajouter')"
+    ];
 
-  for (const sel of quantityFallbacks) {
-    try {
-      const btn = page.locator(sel).first();
-      if (await btn.count() > 0 && await btn.isVisible({ timeout: 250 })) {
-        await btn.click({ timeout: 1500 });
-        break;
+    for (const sel of quantityFallbacks) {
+      try {
+        const btn = page.locator(sel).first();
+        if (await btn.count() > 0 && await btn.isVisible({ timeout: 250 })) {
+          await btn.click({ timeout: 1500 });
+          break;
+        }
+      } catch (_) {
+        // ignore optional prompt
       }
-    } catch (_) {
-      // ignore optional prompt
     }
   }
 
@@ -7269,6 +7506,14 @@ async function addSuperUToCart(page, index = 1, options = {}) {
   }
 
   if (!updated) {
+    if (strictMode) {
+      return {
+        success: false,
+        selector: addSelector,
+        error: "Panier Super U non mis à jour"
+      };
+    }
+
     const loginModalVisible = await page.evaluate(() => {
       const text = String(document.body?.innerText || "").toLowerCase().replace(/\s+/g, " ");
       return /se connecter|identifiez-vous|connexion/.test(text);
@@ -7452,11 +7697,27 @@ async function addSuperUToCart(page, index = 1, options = {}) {
   }).catch(() => 0);
 
   if (provenCartCount <= 0) {
-    return {
-      success: false,
-      selector: addSelector,
-      error: "Panier Super U non confirmé (aucun article détecté)"
-    };
+    const softCartSignals = await page.evaluate(() => {
+      const body = String(document.body?.innerText || "").toLowerCase().replace(/\s+/g, " ");
+      if (/ajout[eé] au panier|article ajout[eé]|panier mis [àa] jour|exemplaires? dans le panier/.test(body)) {
+        return true;
+      }
+
+      const quantityControls = Array.from(document.querySelectorAll("button, a, span, div")).some((node) => {
+        const text = String(node.textContent || node.getAttribute("aria-label") || "").toLowerCase().replace(/\s+/g, " ");
+        return /retirer|supprimer|quantit[eé]|\+\s*1|\-\s*1/.test(text);
+      });
+
+      return quantityControls;
+    }).catch(() => false);
+
+    if (!softCartSignals) {
+      return {
+        success: false,
+        selector: addSelector,
+        error: "Panier Super U non confirmé (aucun article détecté)"
+      };
+    }
   }
 
   console.log("📦 Super U: panier mis à jour");

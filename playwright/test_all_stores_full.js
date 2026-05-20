@@ -34,4 +34,5 @@ if (!result.items.every((entry) => entry.winnerProduct)) {
 }
 
 console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-console.log("🟢 Audit global multi-enseignes (CDP) validé\n");
+console.log("🟢 Audit global validé (CDP)");
+console.log("🟢🟢🟢 VALIDATION FINALE — 100% VERT (CDP ONLY) 🟢🟢🟢\n");

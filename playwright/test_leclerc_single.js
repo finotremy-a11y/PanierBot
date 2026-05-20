@@ -28,4 +28,4 @@ await runSingleStoreAudit({
 assertUnitNormalization();
 
 console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-console.log("🟢 Leclerc validée en mode réel\n");
+console.log("🟢 Leclerc validée (CDP)\n");

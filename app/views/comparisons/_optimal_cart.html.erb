@@ -1,4 +1,4 @@
-<%# Optimal cart panel partial %>
+<%# Premium optimal cart panel with enhanced UX %>
 <%# Usage: render "comparisons/optimal_cart", optimal_cart: cart_hash, mode: "multi_store" %>
 <%
   cart  = optimal_cart || {}
@@ -7,60 +7,105 @@
   mode  ||= "multi_store"
 %>
 
-<div class="rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-violet-50 p-6 shadow-sm ring-1 ring-indigo-100">
-  <div class="flex items-center justify-between gap-4">
-    <div>
-      <p class="text-sm font-semibold uppercase tracking-wide text-indigo-600">Panier optimal</p>
-      <p class="mt-0.5 text-xs text-slate-500">
-        <% if mode == "multi_store" %>
-          Répartition optimale entre toutes les enseignes
-        <% else %>
-          Sélection optimale dans une enseigne
-        <% end %>
-      </p>
-    </div>
-    <% if total > 0 %>
-      <div class="text-right">
-        <p class="text-3xl font-extrabold text-slate-900">
-          <%= number_to_currency(total, unit: "€", separator: ",", delimiter: " ", precision: 2, format: "%n %u") rescue "#{total} €" %>
+<div class="card-premium ring-2 ring-indigo-200">
+  <div class="card-body space-y-6">
+    <%# Header section -%>
+    <div class="flex items-start justify-between gap-4">
+      <div class="space-y-1">
+        <div class="inline-flex items-center gap-2 rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-200">
+          <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+          </svg>
+          Panier optimal
+        </div>
+        <p class="text-sm text-slate-600 mt-2">
+          <% if mode == "multi_store" %>
+            Répartition optimale entre toutes les enseignes
+          <% else %>
+            Sélection optimale dans une enseigne
+          <% end %>
         </p>
-        <p class="text-xs text-slate-500">total estimé</p>
       </div>
-    <% end %>
-  </div>
+      
+      <%# Total price highlight -%>
+      <% if total > 0 %>
+        <div class="flex flex-col items-end gap-1 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 px-4 py-3 ring-1 ring-emerald-200">
+          <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600">Montant total</p>
+          <p class="text-3xl font-extrabold text-emerald-700">
+            <%= number_to_currency(total, unit: "€", separator: ",", delimiter: " ", precision: 2, format: "%n %u") rescue "#{total} €" %>
+          </p>
+        </div>
+      <% end %>
+    </div>
 
-  <%# Per-store breakdown (multi_store) %>
-  <% if mode == "multi_store" %>
-    <% stores = cart[:stores] || {} %>
-    <% stores = stores.transform_keys(&:to_s) if stores.is_a?(Hash) %>
-    <% if stores.any? %>
-      <div class="mt-5 space-y-3">
-        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Répartition par enseigne</p>
-        <% stores.each do |store_key, store_data| %>
-          <% sd = store_data.is_a?(Hash) ? store_data.transform_keys(&:to_sym) : {} %>
-          <% store_items = Array(sd[:items]).map { |i| i.is_a?(Hash) ? i.transform_keys(&:to_sym) : {} } %>
-          <div class="rounded-xl border border-slate-200 bg-white p-4">
-            <div class="flex items-center justify-between">
-              <%= render "shared/store_badge", store: store_key %>
-              <span class="font-bold text-slate-900">
-                <%= number_to_currency(sd[:subtotal].to_f, unit: "€", separator: ",", delimiter: " ", precision: 2, format: "%n %u") rescue "#{sd[:subtotal]} €" %>
-              </span>
-            </div>
-            <% if store_items.any? %>
-              <ul class="mt-3 divide-y divide-slate-50">
-                <% store_items.each do |si| %>
-                  <li class="flex items-center justify-between py-1.5 text-sm">
-                    <span class="font-medium text-slate-700"><%= (si[:query] || si[:product_name] || "").capitalize %></span>
-                    <span class="text-slate-900">
-                      <%= number_to_currency(si[:price].to_f, unit: "€", separator: ",", delimiter: " ", precision: 2, format: "%n %u") rescue "#{si[:price]} €" %>
+    <%# Per-store breakdown (multi_store) -%>
+    <% if mode == "multi_store" %>
+      <% stores = cart[:stores] || {} %>
+      <% stores = stores.transform_keys(&:to_s) if stores.is_a?(Hash) %>
+      <% if stores.any? %>
+        <div class="space-y-3">
+          <p class="text-xs font-semibold uppercase tracking-widest text-slate-600">Répartition par enseigne</p>
+          
+          <div class="space-y-2">
+            <% stores.each do |store_key, store_data| %>
+              <% sd = store_data.is_a?(Hash) ? store_data.transform_keys(&:to_sym) : {} %>
+              <% store_items = Array(sd[:items]).map { |i| i.is_a?(Hash) ? i.transform_keys(&:to_sym) : {} } %>
+              
+              <details class="group">
+                <summary class="flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-slate-300 hover:bg-slate-50 transition-all">
+                  <div class="flex items-center gap-3">
+                    <%= render "shared/store_badge", store: store_key %>
+                    <span class="text-sm font-medium text-slate-600">
+                      <% item_count = store_items.size %>
+                      <%= item_count %> <%= 'article'.pluralize(item_count) %>
                     </span>
-                  </li>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <span class="text-sm font-extrabold text-slate-900">
+                      <%= number_to_currency(sd[:subtotal].to_f, unit: "€", separator: ",", delimiter: " ", precision: 2, format: "%n %u") rescue "#{sd[:subtotal]} €" %>
+                    </span>
+                    <svg class="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180" 
+                         fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                  </div>
+                </summary>
+                
+                <%# Expanded items list -%>
+                <% if store_items.any? %>
+                  <div class="animate-slide-up border border-t-0 border-slate-200 bg-slate-50 px-4 py-3">
+                    <ul class="space-y-2 divide-y divide-slate-200">
+                      <% store_items.each do |si| %>
+                        <li class="flex items-center justify-between py-2 first:pt-0 last:pb-0">
+                          <span class="flex-1 font-medium text-slate-700">
+                            <%= (si[:query] || si[:product_name] || "").capitalize %>
+                          </span>
+                          <span class="ml-2 rounded-lg bg-white px-2.5 py-1 text-sm font-bold text-slate-900">
+                            <%= number_to_currency(si[:price].to_f, unit: "€", separator: ",", delimiter: " ", precision: 2, format: "%n %u") rescue "#{si[:price]} €" %>
+                          </span>
+                        </li>
+                      <% end %>
+                    </ul>
+                  </div>
                 <% end %>
-              </ul>
+              </details>
             <% end %>
           </div>
-        <% end %>
-      </div>
+        </div>
+      <% end %>
     <% end %>
-  <% end %>
+
+    <%# CTA buttons -%>
+    <div class="flex gap-2 pt-4 border-t border-slate-200">
+      <button type="button" class="btn btn-primary btn-sm flex-1 justify-center"
+              onclick="window.print()">
+        🛒 Ajouter au drive
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm flex-1 justify-center"
+              onclick="navigator.share ? navigator.share({title: 'Mon panier optimal', text: 'Total: <%= number_to_currency(total, unit: '€', separator: ',', delimiter: ' ', precision: 2, format: '%n %u') %>'}) : alert('Partage non supporté')">
+        📤 Partager
+      </button>
+    </div>
+  </div>
 </div>
+

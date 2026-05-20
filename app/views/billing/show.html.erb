@@ -1,0 +1,68 @@
+<% content_for :title, "Billing" %>
+
+<section class="mx-auto max-w-5xl px-4 py-10 sm:px-6">
+  <h1 class="text-3xl font-bold text-slate-900">Abonnement & facturation</h1>
+  <p class="mt-2 text-sm text-slate-600">Plan actuel: <strong><%= current_user.plan.capitalize %></strong> · Statut: <strong><%= current_user.subscription_status %></strong></p>
+
+  <% if params[:checkout] == "success" %>
+    <div class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+      Paiement validé. Votre abonnement sera synchronisé par webhook Stripe.
+    </div>
+  <% elsif params[:checkout] == "canceled" %>
+    <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+      Paiement annulé.
+    </div>
+  <% end %>
+
+  <div class="mt-8 grid gap-4 md:grid-cols-3">
+    <% @plans.each do |plan_key, plan| %>
+      <article class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 class="text-xl font-semibold text-slate-900"><%= plan[:label] %></h2>
+        <p class="mt-2 text-sm text-slate-600"><%= plan[:features] %></p>
+        <p class="mt-2 text-xs font-medium uppercase tracking-wide text-slate-500"><%= plan[:limits] %></p>
+
+        <button
+          type="button"
+          data-plan="<%= plan_key %>"
+          class="mt-6 inline-flex rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+          data-action="click->billing#checkout">
+          Choisir <%= plan[:label] %>
+        </button>
+      </article>
+    <% end %>
+  </div>
+</section>
+
+<script>
+  (() => {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+
+    document.querySelectorAll("[data-action='click->billing#checkout']").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const plan = button.dataset.plan;
+        button.disabled = true;
+
+        try {
+          const response = await fetch("/billing/create_checkout_session", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRF-Token": csrfToken
+            },
+            body: JSON.stringify({ plan: plan })
+          });
+
+          const body = await response.json();
+          if (!response.ok) {
+            throw new Error(body.error || "Erreur de facturation");
+          }
+
+          window.location.href = body.checkout_url;
+        } catch (error) {
+          alert(error.message);
+          button.disabled = false;
+        }
+      });
+    });
+  })();
+</script>
