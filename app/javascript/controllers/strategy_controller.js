@@ -17,7 +17,7 @@ export default class extends Controller {
 
   #syncHighlight() {
     const radios = this.element.querySelectorAll("input[name='comparison[strategy]']")
-    radios.forEach(radio => {
+    radios.forEach((radio) => {
       const label = radio.closest("label")
       if (!label) return
       // The Tailwind has-[:checked] handles the visual state, no class toggling needed.

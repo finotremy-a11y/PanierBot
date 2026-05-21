@@ -11,8 +11,8 @@ export default class extends Controller {
     const items = this.element.value
       .trim()
       .split("\n")
-      .filter(line => line.trim())
-    
+      .filter((line) => line.trim())
+
     const counter = document.getElementById("item-count")
     if (counter) {
       counter.textContent = items.length

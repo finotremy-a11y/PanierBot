@@ -3,7 +3,7 @@ require "rails_helper"
 RSpec.describe "Comparison quotas", type: :request do
   let(:user) do
     User.create!(
-      email: "free@example.com",
+      email: "free-web-#{SecureRandom.hex(4)}@example.com",
       password: "password123",
       password_confirmation: "password123",
       plan: "free",
@@ -18,7 +18,7 @@ RSpec.describe "Comparison quotas", type: :request do
   it "blocks free users on multi-store mode" do
     post "/compare", params: {
       comparison: {
-        items_text: ["pates"],
+        items_text: [ "pates" ],
         strategy: "cheapest",
         mode: "multi_store",
         city: "Paris"
@@ -39,7 +39,7 @@ RSpec.describe "Comparison quotas", type: :request do
 
     post "/compare", params: {
       comparison: {
-        items_text: ["pates"],
+        items_text: [ "pates" ],
         strategy: "cheapest",
         mode: "single_store",
         store: "leclerc",

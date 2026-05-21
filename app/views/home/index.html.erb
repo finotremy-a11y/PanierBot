@@ -77,8 +77,8 @@
               </div>
             </div>
 
-            <%# Hidden textarea fallback for progressive enhancement %>
-            <%= f.hidden_field :items_text, id: "items_hidden", data: { list_target: "hidden" } %>
+            <%# Hidden mirror used by Stimulus without colliding with submitted params %>
+            <input type="hidden" id="items_hidden" data-list-target="hidden">
           </div>
 
           <%# ── City ── %>

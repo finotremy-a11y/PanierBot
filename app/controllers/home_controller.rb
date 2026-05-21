@@ -1,4 +1,6 @@
 class HomeController < ApplicationController
+  skip_forgery_protection only: :service_worker
+
   def index
     @strategies = [
       { value: "cheapest", label: "Moins cher", icon: "💰", description: "Prix total le plus bas" },
@@ -7,5 +9,16 @@ class HomeController < ApplicationController
       { value: "best_per_l", label: "Meilleur €/L", icon: "🥛", description: "Optimal au litre" }
     ]
     @stores = [ "leclerc", "carrefour", "intermarche", "superu" ]
+  end
+
+  def manifest
+    response.headers["Content-Type"] = "application/manifest+json"
+    render :manifest, formats: :json, layout: false
+  end
+
+  def service_worker
+    response.headers["Content-Type"] = "application/javascript"
+    response.headers["Service-Worker-Allowed"] = "/"
+    render :service_worker, formats: :js, layout: false
   end
 end

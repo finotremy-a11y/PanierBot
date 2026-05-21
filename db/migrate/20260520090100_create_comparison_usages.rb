@@ -9,6 +9,6 @@ class CreateComparisonUsages < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :comparison_usages, [:user_id, :period_start], unique: true
+    add_index :comparison_usages, [ :user_id, :period_start ], unique: true
   end
 end

@@ -16,15 +16,15 @@ class FinalCartBuilder
     stdout, stderr, status = Open3.capture3(*command)
 
     unless status.success?
-      return failure_response([stderr.presence || "Playwright bridge execution failed"])
+      return failure_response([ stderr.presence || "Playwright bridge execution failed" ])
     end
 
     payload = extract_payload(stdout)
-    return failure_response(["Invalid JSON payload from Playwright bridge"]) if payload.blank?
+    return failure_response([ "Invalid JSON payload from Playwright bridge" ]) if payload.blank?
 
     build_response(payload)
   rescue StandardError => e
-    failure_response([e.message])
+    failure_response([ e.message ])
   end
 
   private

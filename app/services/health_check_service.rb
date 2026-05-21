@@ -54,7 +54,7 @@ class HealthCheckService
   end
 
   def check_playwright
-    command = ["node", "--input-type=module", "-e", "import('playwright').then(()=>console.log('ok'))"]
+    command = [ "node", "--input-type=module", "-e", "import('playwright').then(()=>console.log('ok'))" ]
     _stdout, _stderr, status = Open3.capture3(*command, chdir: Rails.root.join("playwright"))
 
     { ok: status.success? }

@@ -2,7 +2,7 @@
 
 import minimist from "minimist";
 import { runGlobalAudit } from "./audit_harness.js";
-import { buildFinalCart, normalizeProduct } from "./agents/navigator_agent.js";
+import { buildFinalCart, normalizeItems, normalizeProduct } from "./agents/navigator_agent.js";
 
 const STORE_ORDER = ["leclerc", "carrefour", "intermarche", "superu"];
 
@@ -17,10 +17,7 @@ const args = minimist(process.argv.slice(2), {
   }
 });
 
-const items = String(args.items || "")
-  .split(",")
-  .map((value) => value.trim())
-  .filter(Boolean);
+const items = normalizeItems(String(args.items || ""));
 const strategy = String(args.strategy || "cheapest");
 const mode = String(args.mode || "multi_store");
 const city = String(args.city || "Paris");

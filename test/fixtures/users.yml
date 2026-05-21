@@ -1,0 +1,11 @@
+free_user:
+  email: free@example.com
+  encrypted_password: "$2a$12$bnOlJqp.rzDyyyEexUZKjO2Byd4.BlBa4iI4CYk6opMjZmhGef/KS"
+  plan: free
+  subscription_status: inactive
+
+premium_user:
+  email: premium@example.com
+  encrypted_password: "$2a$12$bnOlJqp.rzDyyyEexUZKjO2Byd4.BlBa4iI4CYk6opMjZmhGef/KS"
+  plan: premium
+  subscription_status: active

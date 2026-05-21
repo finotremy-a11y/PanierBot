@@ -1,0 +1,14 @@
+{
+  "name": "panierbot-frontend",
+  "private": true,
+  "scripts": {
+    "lint": "eslint app/javascript/**/*.js",
+    "lint:fix": "eslint --fix app/javascript/**/*.js",
+    "format": "prettier --write app/javascript/**/*.js",
+    "format:check": "prettier --check app/javascript/**/*.js"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0"
+  }
+}

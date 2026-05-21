@@ -25,7 +25,10 @@ export default class extends Controller {
     // Keep at least one row
     if (this.itemTargets.length <= 1) {
       const input = row.querySelector("[data-list-target='input']")
-      if (input) { input.value = ""; input.focus() }
+      if (input) {
+        input.value = ""
+        input.focus()
+      }
       return
     }
     row.remove()
@@ -47,9 +50,7 @@ export default class extends Controller {
 
   syncHidden() {
     if (!this.hasHiddenTarget) return
-    const values = this.inputTargets
-      .map(i => i.value.trim())
-      .filter(v => v.length > 0)
+    const values = this.inputTargets.map((i) => i.value.trim()).filter((v) => v.length > 0)
     this.hiddenTarget.value = values.join("\n")
   }
 

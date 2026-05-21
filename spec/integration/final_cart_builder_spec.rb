@@ -6,7 +6,7 @@ RSpec.describe FinalCartBuilder, type: :model do
       {
         success: true,
         total: 12.34,
-        stores: [{ store: "leclerc", subtotal: 12.34, item_count: 2 }],
+        stores: [ { store: "leclerc", subtotal: 12.34, item_count: 2 } ],
         results: [
           {
             item: "pates",
@@ -19,7 +19,7 @@ RSpec.describe FinalCartBuilder, type: :model do
             }
           }
         ],
-        logs: ["mock-playwright"],
+        logs: [ "mock-playwright" ],
         errors: []
       }
     end
@@ -28,9 +28,9 @@ RSpec.describe FinalCartBuilder, type: :model do
       stdout = "PANIERBOT_JSON_START\n#{stdout_payload.to_json}\nPANIERBOT_JSON_END\n"
       status = instance_double(Process::Status, success?: true)
 
-      allow(Open3).to receive(:capture3).and_return([stdout, "", status])
+      allow(Open3).to receive(:capture3).and_return([ stdout, "", status ])
 
-      result = described_class.new(items: ["pates"], strategy: "cheapest", mode: "multi_store").call
+      result = described_class.new(items: [ "pates" ], strategy: "cheapest", mode: "multi_store").call
 
       expect(result[:success]).to eq(true)
       expect(result[:total]).to eq(12.34)
@@ -40,9 +40,9 @@ RSpec.describe FinalCartBuilder, type: :model do
 
     it "returns failure payload when bridge exits in error" do
       status = instance_double(Process::Status, success?: false)
-      allow(Open3).to receive(:capture3).and_return(["", "bridge failed", status])
+      allow(Open3).to receive(:capture3).and_return([ "", "bridge failed", status ])
 
-      result = described_class.new(items: ["pates"], strategy: "cheapest", mode: "multi_store").call
+      result = described_class.new(items: [ "pates" ], strategy: "cheapest", mode: "multi_store").call
 
       expect(result[:success]).to eq(false)
       expect(result[:errors]).to include("bridge failed")

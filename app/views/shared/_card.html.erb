@@ -1,24 +1,18 @@
-<%#
+<%# 
   Premium Card Component
-  Usage:
-    <%= render "shared/card" do %>
-      <div class="card-header">
-        <h3>Title</h3>
-      </div>
-      <div class="card-body">
-        Content here
-      </div>
-      <div class="card-footer">
-        Footer actions
-      </div>
-    <% end %>
+  
+  Basic usage with block content:
+    render "shared/card" do 
+      div class="card-header" h3 Title /h3 /div
+      div class="card-body" Content here /div
+      div class="card-footer" Footer actions /div
     
-    Or simple card:
-    <%= render "shared/card", premium: true do %>
+  Or simple card with premium styling:
+    render "shared/card", premium: true do 
       Your content
-    <% end %>
 %>
-<% variant = variant || (premium ? "card-premium" : "card") %>
-<div class="<%= variant %> <% if hover_effect %>hover-lift<% end %>">
+<% variant = local_assigns[:variant] || (local_assigns[:premium] ? "card-premium" : "card") %>
+<% hover_effect = local_assigns[:hover_effect] || false %>
+<div class="<%= variant %><% if hover_effect %> hover-lift<% end %>">
   <%= yield %>
 </div>

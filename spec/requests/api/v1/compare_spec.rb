@@ -18,15 +18,15 @@ RSpec.describe "Api::V1::Compare", type: :request do
           ],
           total: 1.1,
           totals_by_store: { "carrefour" => 1.1 },
-          stores: [{ store: "carrefour", item_count: 1, subtotal: 1.1 }],
-          logs: ["buildFinalCart called"],
+          stores: [ { store: "carrefour", item_count: 1, subtotal: 1.1 } ],
+          logs: [ "buildFinalCart called" ],
           errors: []
         }
       )
 
       post "/api/v1/compare",
         params: {
-          items: ["pates"],
+          items: [ "pates" ],
           strategy: "cheapest",
           mode: "multi_store"
         }.to_json,
@@ -59,7 +59,7 @@ RSpec.describe "Api::V1::Compare", type: :request do
     it "requires API key" do
       post "/api/v1/compare",
         params: {
-          items: ["pates"],
+          items: [ "pates" ],
           strategy: "cheapest",
           mode: "multi_store"
         }.to_json,
@@ -74,7 +74,7 @@ RSpec.describe "Api::V1::Compare", type: :request do
     end
 
     it "rate limits free users on compare" do
-      user = User.create!(email: "free@example.com", password: "password123", plan: :free)
+      user = User.create!(email: "free-api-#{SecureRandom.hex(4)}@example.com", password: "password123", plan: :free)
 
       allow_any_instance_of(FinalCartBuilder).to receive(:call).and_return(
         {
@@ -91,7 +91,7 @@ RSpec.describe "Api::V1::Compare", type: :request do
       10.times do
         post "/api/v1/compare",
           params: {
-            items: ["pates"],
+            items: [ "pates" ],
             strategy: "cheapest",
             mode: "single_store"
           }.to_json,
@@ -102,7 +102,7 @@ RSpec.describe "Api::V1::Compare", type: :request do
 
       post "/api/v1/compare",
         params: {
-          items: ["pates"],
+          items: [ "pates" ],
           strategy: "cheapest",
           mode: "single_store"
         }.to_json,

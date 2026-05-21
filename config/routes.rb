@@ -1,5 +1,5 @@
 Rails.application.routes.draw do
-  devise_for :users
+  devise_for :users, controllers: { sessions: "users/sessions" }
 
   namespace :api do
     namespace :v1 do
@@ -15,6 +15,8 @@ Rails.application.routes.draw do
   # Landing page
   root "home#index"
   get "home", to: "home#index", as: :home
+  get "manifest.json", to: "home#manifest"
+  get "service-worker.js", to: "home#service_worker"
 
   # SaaS account pages
   get "account", to: "accounts#show"

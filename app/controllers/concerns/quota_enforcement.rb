@@ -5,7 +5,7 @@ module QuotaEnforcement
     return true unless current_user&.free?
 
     usage = ComparisonUsage.for_user_and_month(current_user)
-    remaining = [User::MONTHLY_COMPARISON_LIMIT - usage.comparisons_count, 0].max
+    remaining = [ User::MONTHLY_COMPARISON_LIMIT - usage.comparisons_count, 0 ].max
 
     Rails.logger.warn("⚠️ Quota restant : #{remaining}")
 

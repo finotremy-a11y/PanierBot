@@ -17,7 +17,7 @@ export default class extends Controller {
   #syncStoreSelector() {
     const selected = this.element.querySelector("input[name='comparison[mode]']:checked")
     const isSingle = selected?.value === "single_store"
-    this.storeSelectorTargets.forEach(el => {
+    this.storeSelectorTargets.forEach((el) => {
       el.classList.toggle("hidden", !isSingle)
     })
   }

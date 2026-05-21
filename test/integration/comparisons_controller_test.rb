@@ -1,8 +1,15 @@
 require "test_helper"
 
 class ComparisonsControllerTest < ActionDispatch::IntegrationTest
+  include Devise::Test::IntegrationHelpers
+
   # Use a real in-memory cache store so Rails.cache.write/read work in tests
-  setup    { @original_cache = Rails.cache; Rails.cache = ActiveSupport::Cache::MemoryStore.new }
+  setup do
+    @original_cache = Rails.cache
+    Rails.cache = ActiveSupport::Cache::MemoryStore.new
+    sign_in users(:premium_user)
+  end
+
   teardown { Rails.cache = @original_cache }
 
   # ── POST /compare ────────────────────────────────────────────────────────────
@@ -11,7 +18,7 @@ class ComparisonsControllerTest < ActionDispatch::IntegrationTest
     assert_enqueued_with(job: BuildComparisonJob) do
       post compare_path, params: {
         comparison: {
-          items_text: ["pâtes", "lait"],
+          items_text: [ "pâtes", "lait" ],
           mode:       "multi_store",
           strategy:   "cheapest",
           city:       "Paris"
@@ -27,7 +34,7 @@ class ComparisonsControllerTest < ActionDispatch::IntegrationTest
     assert_enqueued_with(job: BuildComparisonJob) do
       post compare_path, params: {
         comparison: {
-          items_text: ["bananes"],
+          items_text: [ "bananes" ],
           mode:       "single_store",
           strategy:   "cheapest",
           store:      "leclerc",
@@ -50,7 +57,7 @@ class ComparisonsControllerTest < ActionDispatch::IntegrationTest
   test "POST /compare with invalid strategy normalizes and creates job" do
     assert_enqueued_with(job: BuildComparisonJob) do
       post compare_path, params: {
-        comparison: { items_text: ["pâtes"], mode: "multi_store", strategy: "hack; rm -rf /" }
+        comparison: { items_text: [ "pâtes" ], mode: "multi_store", strategy: "hack; rm -rf /" }
       }
     end
     assert_response :redirect
@@ -60,7 +67,7 @@ class ComparisonsControllerTest < ActionDispatch::IntegrationTest
   test "POST /compare with invalid mode normalizes and creates job" do
     assert_enqueued_with(job: BuildComparisonJob) do
       post compare_path, params: {
-        comparison: { items_text: ["pâtes"], mode: "invalid_mode", strategy: "cheapest" }
+        comparison: { items_text: [ "pâtes" ], mode: "invalid_mode", strategy: "cheapest" }
       }
     end
     assert_response :redirect
@@ -72,7 +79,7 @@ class ComparisonsControllerTest < ActionDispatch::IntegrationTest
     result_id = SecureRandom.uuid
     Rails.cache.write("comparison_result:#{result_id}", {
       processing: true, mode: "multi_store", strategy: "cheapest",
-      items: ["pâtes"], city: "Paris"
+      items: [ "pâtes" ], city: "Paris"
     })
 
     get comparison_path(result_id)

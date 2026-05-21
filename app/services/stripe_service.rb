@@ -40,8 +40,8 @@ class StripeService
     session = Stripe::Checkout::Session.create(
       mode: "subscription",
       customer: stripe_customer_id,
-      payment_method_types: ["card"],
-      line_items: [{ price: price_id_for(plan), quantity: 1 }],
+      payment_method_types: [ "card" ],
+      line_items: [ { price: price_id_for(plan), quantity: 1 } ],
       metadata: { plan: plan, user_id: @user.id },
       success_url: with_status(success_url, "success"),
       cancel_url: with_status(cancel_url, "canceled")

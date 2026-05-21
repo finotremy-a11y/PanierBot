@@ -5,6 +5,7 @@ import {
   sortProductsByStrategy,
   compareProductsAcrossStores,
   buildFinalCart,
+  normalizeItems,
   normalizeProduct
 } from "./agents/navigator_agent.js";
 
@@ -103,6 +104,9 @@ function buildCounters() {
 function runHelpersAudit() {
   log("🔎 Filtrage");
 
+  const normalizedItems = normalizeItems(" pâtes\n,lait, pâtes , oeufs ");
+  assert(JSON.stringify(normalizedItems) === JSON.stringify(["pâtes", "lait", "oeufs"]), "normalizeItems doit nettoyer, découper et dédupliquer les entrées texte");
+
   const kgProducts = [
     normalizeProduct({ name: "Kg A", price: 2.4, quantity: "1kg", pricePerKg: 2.4, availability: "disponible", id: "kg-a", url: "kg-a" }, { store: "test", index: 0 }),
     normalizeProduct({ name: "Kg B", price: 1.1, quantity: "500g", pricePerKg: 2.2, availability: "disponible", id: "kg-b", url: "kg-b" }, { store: "test", index: 1 }),
@@ -153,7 +157,7 @@ async function runComparatorAudit() {
   const comparison = compareProductsAcrossStores(itemLists, "cheapest", { logs: [] });
   assert(comparison.bestProduct?.store === "carrefour", "La comparaison globale doit sélectionner le meilleur produit cross-store");
 
-  const multiResult = await buildFinalCart(["pâtes", "lait"], "cheapest", "multi_store", {
+  const multiResult = await buildFinalCart("pâtes\n,lait, pâtes", "cheapest", "multi_store", {
     adapters,
     logs: []
   });

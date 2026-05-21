@@ -430,5 +430,17 @@ input[type="tel"],
 input[type="url"],
 textarea,
 select {
-  @apply input select;
+  @apply block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 transition-all;
+  font-size: var(--font-size-sm);
+}
+
+select {
+  @apply appearance-none bg-no-repeat pr-10;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23333' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+  background-position: right 0.5rem center;
+  background-size: 1.5em 1.5em;
+}
+
+textarea {
+  @apply resize-none;
 }

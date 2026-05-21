@@ -3,10 +3,10 @@ import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
   static targets = ["submitBtn", "btnText", "btnLoading"]
-  static values  = {
-    pollingUrl:  String,
+  static values = {
+    pollingUrl: String,
     redirectUrl: String,
-    autoPoll:    { type: Boolean, default: false }
+    autoPoll: { type: Boolean, default: false },
   }
 
   connect() {
@@ -20,14 +20,17 @@ export default class extends Controller {
   }
 
   // Called on form submit
-  submit(event) {
+  submit(_event) {
     // Collect items from list inputs before submit
     const container = this.element.querySelector("[data-controller='list']")
     if (container) {
-      const inputs  = container.querySelectorAll("input[name='comparison[items_text][]']")
-      const hidden  = container.querySelector("#items_hidden")
+      const inputs = container.querySelectorAll("input[name='comparison[items_text][]']")
+      const hidden = container.querySelector("#items_hidden")
       if (hidden) {
-        hidden.value = Array.from(inputs).map(i => i.value.trim()).filter(Boolean).join("\n")
+        hidden.value = Array.from(inputs)
+          .map((i) => i.value.trim())
+          .filter(Boolean)
+          .join("\n")
       }
     }
     this.#setLoading(true)
@@ -56,7 +59,7 @@ export default class extends Controller {
     if (!this.pollingUrlValue) return
     try {
       const response = await fetch(this.pollingUrlValue, {
-        headers: { "Accept": "application/json", "X-Requested-With": "XMLHttpRequest" }
+        headers: { Accept: "application/json", "X-Requested-With": "XMLHttpRequest" },
       })
       if (!response.ok) return
       const data = await response.json()
@@ -76,7 +79,7 @@ export default class extends Controller {
 
   #setLoading(loading) {
     if (this.hasSubmitBtnTarget) this.submitBtnTarget.disabled = loading
-    if (this.hasBtnTextTarget)   this.btnTextTarget.classList.toggle("hidden", loading)
+    if (this.hasBtnTextTarget) this.btnTextTarget.classList.toggle("hidden", loading)
     if (this.hasBtnLoadingTarget) this.btnLoadingTarget.classList.toggle("hidden", !loading)
   }
 }

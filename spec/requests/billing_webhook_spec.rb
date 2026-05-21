@@ -18,7 +18,7 @@ RSpec.describe "Billing webhook", type: :request do
         status: "active",
         metadata: { plan: "premium" },
         items: {
-          data: [{ price: { id: "price_any" } }]
+          data: [ { price: { id: "price_any" } } ]
         }
       }
     )

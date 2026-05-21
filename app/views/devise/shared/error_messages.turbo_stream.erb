@@ -1,0 +1,10 @@
+<%= turbo_stream.replace "devise-error-messages" do %>
+  <div id="devise-error-messages">
+    <% if resource&.errors&.any? %>
+      <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p class="font-semibold">La soumission a échoué.</p>
+        <p class="mt-1"><%= resource.errors.full_messages.to_sentence %></p>
+      </div>
+    <% end %>
+  </div>
+<% end %>

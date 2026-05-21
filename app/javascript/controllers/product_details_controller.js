@@ -14,11 +14,11 @@ export default class extends Controller {
 
     if (this.#isOpen) {
       panel.style.maxHeight = panel.scrollHeight + "px"
-      panel.style.opacity   = "1"
+      panel.style.opacity = "1"
       if (this.hasIconTarget) this.iconTarget.style.transform = "rotate(180deg)"
     } else {
       panel.style.maxHeight = "0"
-      panel.style.opacity   = "0"
+      panel.style.opacity = "0"
       if (this.hasIconTarget) this.iconTarget.style.transform = "rotate(0deg)"
     }
   }

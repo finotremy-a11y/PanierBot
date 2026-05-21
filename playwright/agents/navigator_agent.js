@@ -28,6 +28,7 @@ const STORE_KEYS = Object.freeze({
   LECLERC: "leclerc",
   CARREFOUR: "carrefour",
   INTERMARCHE: "intermarche",
+  SUPERU: "superu",
   DEFAULT: "default"
 });
 
@@ -1189,14 +1190,14 @@ function isProductInStock(product) {
 function hasStrategyMetric(product, strategy) {
   switch (normalizeStrategy(strategy)) {
     case "best_per_kg":
-      return isFiniteNumber(product?.pricePerKg);
+      return isFiniteNumber(product?.pricePerKg) && Number(product.pricePerKg) > 0;
     case "best_per_l":
-      return isFiniteNumber(product?.pricePerL);
+      return isFiniteNumber(product?.pricePerL) && Number(product.pricePerL) > 0;
     case "per_unit":
-      return isFiniteNumber(product?.pricePerUnit);
+      return isFiniteNumber(product?.pricePerUnit) && Number(product.pricePerUnit) > 0;
     case "cheapest":
     default:
-      return isFiniteNumber(product?.price);
+      return isFiniteNumber(product?.price) && Number(product.price) > 0;
   }
 }
 
@@ -1307,9 +1308,7 @@ function compareProducts(productsByStore, strategy = "cheapest", options = {}) {
 
 async function buildFinalCart(items = [], strategy = "cheapest", mode = "multi_store", options = {}) {
   return runWithIntelligentRetry("buildFinalCart", options, async () => {
-    const queries = Array.isArray(items)
-      ? items.map((item) => String(item || "").trim()).filter(Boolean)
-      : [];
+    const queries = normalizeItems(items);
     const safeStrategy = normalizeStrategy(strategy);
     const safeMode = String(mode || "multi_store").trim().toLowerCase() === "single_store" ? "single_store" : "multi_store";
     const adapters = options.adapters || null;
@@ -1721,6 +1720,53 @@ function detectPopup(html, selectors = SELECTORS_BY_STORE[STORE_KEYS.DEFAULT]) {
   // }
 
   return null;
+}
+
+function detectBlockedPage(html, url) {
+  const lowerHtml = String(html || "").toLowerCase();
+  const lowerUrl = String(url || "").toLowerCase();
+
+  const blockedSignals = [
+    "just a moment",
+    "please enable js and disable any ad blocker",
+    "captcha-delivery.com",
+    "geo.captcha-delivery.com",
+    "page d'erreur",
+    "noindex, nofollow",
+    "access denied",
+    "forbidden"
+  ];
+
+  const hasBlockedSignal = blockedSignals.some((signal) => lowerHtml.includes(signal));
+  if (!hasBlockedSignal) {
+    return null;
+  }
+
+  if (lowerUrl.includes("intermarche")) {
+    return "Acces bloque par anti-bot/captcha Intermarche (verification JS requise)";
+  }
+
+  if (lowerUrl.includes("leclerc")) {
+    return "Acces bloque par page de protection Leclerc (DOM Drive indisponible)";
+  }
+
+  return "Acces bloque par protection anti-bot/captcha";
+}
+
+function detectStoreKey({ url, store }) {
+  const fromStore = String(store || "").toLowerCase();
+  if (fromStore.includes("leclerc")) return STORE_KEYS.LECLERC;
+  if (fromStore.includes("carrefour")) return STORE_KEYS.CARREFOUR;
+  if (fromStore.includes("intermarche")) return STORE_KEYS.INTERMARCHE;
+  if (fromStore.includes("super u") || fromStore.includes("superu")) return STORE_KEYS.SUPERU;
+
+  const lowerUrl = String(url || "").toLowerCase();
+  if (lowerUrl.includes("leclerc")) return STORE_KEYS.LECLERC;
+  if (lowerUrl.includes("carrefour")) return STORE_KEYS.CARREFOUR;
+  if (lowerUrl.includes("intermarche")) return STORE_KEYS.INTERMARCHE;
+  if (lowerUrl.includes("coursesu") || lowerUrl.includes("super u") || lowerUrl.includes("superu")) return STORE_KEYS.SUPERU;
+
+  return STORE_KEYS.DEFAULT;
 }
 
 function detectStoreSelectionPage(html, selectors = SELECTORS_BY_STORE[STORE_KEYS.DEFAULT]) {
@@ -2147,6 +2193,27 @@ function selectorLikelyPresentInHtml(lowerHtml, selector) {
   return meaningfulTokens.some((token) => lowerHtml.includes(token));
 }
 
+function normalizeItems(itemsText) {
+  if (Array.isArray(itemsText)) {
+    return Array.from(new Set(
+      itemsText
+        .map((item) => String(item || "").trim())
+        .filter((item) => item.length > 0)
+    ));
+  }
+
+  if (typeof itemsText !== "string") {
+    return [];
+  }
+
+  return Array.from(new Set(
+    itemsText
+      .split(/[\n,]+/)
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0)
+  ));
+}
+
 function hasVisibleHtmlMatch(html, patterns) {
   for (const pattern of patterns) {
     const matches = String(html || "").match(pattern) || [];
@@ -2284,6 +2351,8 @@ function getDebugLogs() {
 const LECLERC_ARROW_SELECTORS = [
   // Store cards (new iel-* list): clickable blocks in right panel
   "section[class*='iel-flex-row'] > :last-child div[class*='iel-cursor-pointer'][class*='iel-flex-col']",
+  // ── 'Faire vos courses' link present in store list ──────────────────────────
+  "a:has-text('Faire vos courses')",
   // ── New iel-* React component (leclercdrive.fr 2024+) ───────────────────────
   // "Choisir ce Drive" button directly in the store list panel
   "button:has-text('Choisir ce Drive')",
@@ -2949,6 +3018,14 @@ async function selectLeclercDriveArrow(page, options = {}) {
       await page.keyboard.press("Enter").catch(() => {});
       await page.waitForTimeout(900);
     }
+    // Wait for city autocomplete dropdown and click the first suggestion
+    await page.waitForTimeout(1200);
+    const citySuggestion = page.locator("div.iel-cursor-pointer.iel-select-none, [class*='iel-cursor-pointer'][class*='iel-select-none']").first();
+    if (await citySuggestion.count() > 0 && await citySuggestion.isVisible({ timeout: 2000 })) {
+      await citySuggestion.click({ timeout: 3000 }).catch(() => {});
+      logger.push("selectLeclercDriveArrow:city_suggestion_clicked");
+      await page.waitForTimeout(2000);
+    }
   } catch (_) {
     // continue with selector detection
   }
@@ -3126,6 +3203,19 @@ async function selectLeclercDriveArrow(page, options = {}) {
     }
     console.log(`🖱️  Clic effectué sur : ${firstArrowSelector}`);
     logger.push(`selectLeclercDriveArrow:click_done selector=${firstArrowSelector}`);
+    // If selector leads to catalog navigation (Faire vos courses), wait for URL change
+    if (/faire vos courses/i.test(firstArrowSelector)) {
+      try {
+        await page.waitForURL(/fd4-courses\.leclercdrive\.fr/i, { timeout: 20000 });
+        await page.waitForLoadState("domcontentloaded", { timeout: 15000 }).catch(() => {});
+        await page.waitForTimeout(1500);
+        logger.push(`selectLeclercDriveArrow:catalog_url_reached url=${page.url()}`);
+        console.log(`✅ Catalogue atteint : ${page.url()}`);
+        return { success: true, selector: firstArrowSelector, error: null };
+      } catch (_) {
+        // URL didn't change, fall through to Step 4
+      }
+    }
   } catch (clickErr) {
     if (strictMode) {
       const msg = `Clic échoué : ${clickErr.message}`;
@@ -3188,11 +3278,69 @@ async function selectLeclercDriveArrow(page, options = {}) {
     logger.push("selectLeclercDriveArrow:panel_open");
     return { success: true, selector: firstArrowSelector, error: null };
   } catch (panelErr) {
-    if (strictMode) {
-      const msg = `Panneau de détail non détecté après ${panelTimeout}ms : ${panelErr.message}`;
-      logger.push(`selectLeclercDriveArrow:panel_not_opened ${msg}`);
-      return { success: false, selector: firstArrowSelector, error: msg };
+    // Check if we already navigated to catalog URL — that's also success
+    const currentUrl = String(page.url() || "");
+    if (/fd4-courses\.leclercdrive\.fr/i.test(currentUrl)) {
+      logger.push(`selectLeclercDriveArrow:catalog_already_reached url=${currentUrl}`);
+      console.log(`✅ Catalogue déjà atteint : ${currentUrl}`);
+      return { success: true, selector: firstArrowSelector, error: null };
     }
+    // Don't return here - try the fallback approach first
+  }
+
+    // ── Step 4b : click "Choisir ce Drive" to confirm selection ──────────────────
+    const chooseSelectors = [
+      "button:has-text('Choisir ce Drive')",
+      "button:has-text('Choisir ce drive')",
+      "button:has-text('Continuer')",
+      "button:has-text('Choisir')"
+    ];
+
+    try {
+      const chooseBtn = await waitAnySelector(page, chooseSelectors, 3000);
+      if (chooseBtn) {
+        await page.locator(chooseBtn).first().click({ timeout: 5000 }).catch(() => {});
+        await page.waitForTimeout(800);
+        logger.push("selectLeclercDriveArrow:drive_confirmed");
+      }
+    } catch (_) {
+      // Continue even if click fails - panel may be self-confirming
+    }
+
+    // ── Step 5 : verify we reached the catalog or store confirmation ──────────────
+    try {
+      await page.waitForFunction(() => {
+        const body = (document.body?.innerText || "").toLowerCase();
+        return (
+          body.includes("commencer mes courses") ||
+          body.includes("je peux retirer ma commande") ||
+          body.includes("votre magasin") ||
+          body.includes("mon magasin") ||
+          body.includes("rechercher un produit")
+        );
+      }, { timeout: panelTimeout });
+      console.log("✅ Magasin sélectionné, catalogue accessible");
+      logger.push("selectLeclercDriveArrow:catalog_ready");
+      // Try to navigate to the catalog by clicking 'Faire vos courses'
+      try {
+        const faireVosCourses = page.locator("a:has-text('Faire vos courses')").first();
+        if (await faireVosCourses.count() > 0 && await faireVosCourses.isVisible({ timeout: 500 })) {
+          await faireVosCourses.click({ timeout: 5000 });
+          await page.waitForLoadState("domcontentloaded", { timeout: 20000 }).catch(() => {});
+          await page.waitForTimeout(1500);
+          logger.push(`selectLeclercDriveArrow:catalog_navigated url=${page.url()}`);
+          console.log(`✅ Navigation catalogue : ${page.url()}`);
+        }
+      } catch (_) {
+        // catalog navigation optional – searchProduct will handle it
+      }
+      return { success: true, selector: firstArrowSelector, error: null };
+    } catch (panelErr) {
+      if (strictMode) {
+        const msg = `Panneau de détail non détecté après ${panelTimeout}ms : ${panelErr.message}`;
+        logger.push(`selectLeclercDriveArrow:panel_not_opened ${msg}`);
+        return { success: false, selector: firstArrowSelector, error: msg };
+      }
 
     // Panel may have a slightly different text – try a broader fallback
     try {
@@ -3205,8 +3353,19 @@ async function selectLeclercDriveArrow(page, options = {}) {
           body.includes("mon magasin")
         );
       }, { timeout: 2500 });
-      console.log("✅ Flèche cliquée – panneau détecté via contenu textuel");
+      console.log("✅ Magasin sélectionné via texte du panneau");
       logger.push("selectLeclercDriveArrow:panel_open_fallback");
+      // Now click the confirm button
+      const chooseBtn = await waitAnySelector(page, [
+        "button:has-text('Choisir ce Drive')",
+        "button:has-text('Choisir ce drive')",
+        "button:has-text('Continuer')",
+        "button:has-text('Choisir')"
+      ], 2000);
+      if (chooseBtn) {
+        await page.locator(chooseBtn).first().click({ timeout: 4000 }).catch(() => {});
+        await page.waitForTimeout(600);
+      }
       return { success: true, selector: firstArrowSelector, error: null };
     } catch (_) {
       const msg = `Panneau de détail non détecté après ${panelTimeout}ms : ${panelErr.message}`;
@@ -4079,6 +4238,7 @@ async function searchProduct(page, query, options = {}) {
 
   // If we are still on the store details step, open catalog first.
   const catalogEntrySelectors = [
+    "a:has-text('Faire vos courses')",
     "button:has-text('Commencer mes courses')",
     "a:has-text('Commencer mes courses')",
     "button:has-text('Continuer')",
@@ -4090,12 +4250,33 @@ async function searchProduct(page, query, options = {}) {
       const entry = page.locator(sel).first();
       if (await entry.count() > 0 && await entry.isVisible({ timeout: 200 })) {
         await dismissBlockingOverlays(page);
-        await entry.click({ timeout: 3000 });
-        await page.waitForTimeout(1200);
+        await entry.click({ timeout: 5000 });
+        await page.waitForTimeout(2000);
         break;
       }
     } catch (_) {
       // optional transition step
+    }
+  }
+
+  // If still on leclercdrive.fr (home/store-selection page), navigate directly to the catalog.
+  const currentUrlAfterEntry = String(page.url() || "");
+  if (/leclercdrive\.fr/i.test(currentUrlAfterEntry) && !/fd4-courses/i.test(currentUrlAfterEntry)) {
+    try {
+      // Look for a 'Faire vos courses' link that points to the catalog subdomain
+      const catalogHref = await page.evaluate(() => {
+        const links = Array.from(document.querySelectorAll("a[href*='fd4-courses'], a[href*='leclercdrive.fr/magasin']"));
+        return links.length > 0 ? links[0].href : null;
+      });
+      if (catalogHref) {
+        logger.push(`searchProduct:navigating_to_catalog url=${catalogHref}`);
+        console.log(`🔍 Navigation vers le catalogue : ${catalogHref}`);
+        await page.goto(catalogHref, { waitUntil: "domcontentloaded", timeout: Math.min(timeout, 30000) });
+        await page.waitForLoadState("domcontentloaded", { timeout: 15000 }).catch(() => {});
+        await page.waitForTimeout(1500);
+      }
+    } catch (_) {
+      // continue with selector detection below
     }
   }
 
@@ -7730,6 +7911,7 @@ export {
   SELECTORS,
   SELECTORS_BY_STORE,
   LECLERC_ARROW_SELECTORS,
+  normalizeItems,
   decideNextAction,
   detectPageType,
   findSearchInput,

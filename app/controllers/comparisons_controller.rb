@@ -2,6 +2,7 @@ class ComparisonsController < ApplicationController
   include QuotaEnforcement
 
   before_action :authenticate_user!
+  skip_before_action :authenticate_user!, if: :development_mode?
 
   STRATEGIES = %w[cheapest best_per_kg per_unit best_per_l].freeze
   MODES      = %w[single_store multi_store].freeze
@@ -49,9 +50,9 @@ class ComparisonsController < ApplicationController
     )
 
     respond_to do |format|
-      format.html { redirect_to comparison_path(result_id) }
+      format.html { redirect_to comparison_path(result_id), status: :see_other }
       format.json { render json: { id: result_id, redirect: comparison_path(result_id) } }
-      format.turbo_stream { redirect_to comparison_path(result_id) }
+      format.turbo_stream { redirect_to comparison_path(result_id), status: :see_other }
     end
   rescue StandardError => e
     Rails.logger.error("[ComparisonsController] create failed: #{e.class} – #{e.message}")
@@ -79,7 +80,14 @@ class ComparisonsController < ApplicationController
   private
 
   def comparison_params
-    params.require(:comparison).permit(:strategy, :mode, :store, :city, items_text: [])
+    comparison = params.require(:comparison)
+    permitted = comparison.permit(:strategy, :mode, :store, :city, :items_text, items_text: [])
+
+    if permitted[:items_text].blank? && comparison[:items_text].present?
+      permitted[:items_text] = comparison[:items_text]
+    end
+
+    permitted
   end
 
   def parse_items(text)
@@ -107,10 +115,15 @@ class ComparisonsController < ApplicationController
     respond_to do |format|
       format.html { redirect_to home_path, alert: message }
       format.json { render json: { errors: [ message ] }, status: :unprocessable_entity }
+      format.turbo_stream { redirect_to home_path, alert: message, status: :see_other }
     end
   end
 
   def cache_key_for(id)
     "comparison_result:#{id}"
+  end
+
+  def development_mode?
+    Rails.env.development?
   end
 end

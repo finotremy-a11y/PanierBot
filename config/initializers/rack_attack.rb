@@ -8,8 +8,8 @@ class Rack::Attack
     Rails.cache
   end
 
-  safelist("allow localhost") do |req|
-    Rails.env.development? && ["127.0.0.1", "::1"].include?(req.ip)
+  safelist("allow-localhost") do |req|
+    !Rails.env.test? && (req.ip == "127.0.0.1" || req.ip == "::1")
   end
 
   throttle("api/ip", limit: 30, period: 1.minute) do |req|
@@ -60,7 +60,7 @@ class Rack::Attack
         "Content-Type" => "application/json",
         "Retry-After" => retry_after.to_s
       },
-      [body]
+      [ body ]
     ]
   end
 
@@ -84,9 +84,13 @@ class Rack::Attack
     period = match_data[:period].to_i
     return 60 if period <= 0
 
-    [period - (Time.current.to_i % period), 1].max
+    [ period - (Time.current.to_i % period), 1 ].max
   end
 end
+
+# Keep Rack::Attack disabled in development only. Test must exercise the
+# middleware so request specs can validate throttling behavior.
+Rack::Attack.enabled = !Rails.env.development?
 
 Rails.application.config.middleware.use Rack::Attack
 

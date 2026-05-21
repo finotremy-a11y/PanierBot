@@ -16,7 +16,7 @@ class ApiSecurityAuditMiddleware
 
     Rails.logger.info(log_payload(request, event: "api.latency", status: status, duration_ms: duration_ms).to_json)
 
-    [status, headers, response]
+    [ status, headers, response ]
   rescue StandardError => error
     Rails.logger.error(
       log_payload(
@@ -37,7 +37,7 @@ class ApiSecurityAuditMiddleware
   end
 
   def suspicious_request?(request)
-    request_signature = [request.fullpath, request.user_agent, request.get_header("HTTP_ORIGIN")].compact.join(" ")
+    request_signature = [ request.fullpath, request.user_agent, request.get_header("HTTP_ORIGIN") ].compact.join(" ")
 
     suspicious_origin?(request) ||
       request.user_agent.blank? ||
