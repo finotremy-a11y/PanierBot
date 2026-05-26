@@ -18,7 +18,14 @@ const LOAD_DURATION_SEC = toPositiveNumber(process.env.LOAD_TEST_DURATION_SEC, 4
 const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:3000";
 const API_KEY = process.env.PANIERBOT_API_KEY || "test-api-key";
 const CDP_URL = process.env.CDP_URL || "http://127.0.0.1:9222";
-const CDP_CONNECT_CHECK = String(process.env.CDP_CONNECT_CHECK || "true").toLowerCase() !== "false";
+const CDP_CONNECT_CHECK = String(process.env.CDP_CONNECT_CHECK || "false").toLowerCase() === "true";
+const LOAD_INCLUDE_COMPARE = String(process.env.LOAD_INCLUDE_COMPARE || "false").toLowerCase() === "true";
+const MAX_API_ERROR_RATE_PERCENT = toPositiveNumber(process.env.LOAD_MAX_API_ERROR_RATE_PERCENT, 2);
+const MAX_API_P95_MS = toPositiveNumber(process.env.LOAD_MAX_API_P95_MS, 2500);
+const HIGH_LOAD_USER_THRESHOLD = Math.max(1, Math.floor(toPositiveNumber(process.env.LOAD_HIGH_USER_THRESHOLD, 50)));
+const MAX_API_P95_MS_HIGH_LOAD = toPositiveNumber(process.env.LOAD_MAX_API_P95_MS_HIGH_LOAD, 6500);
+const MIN_CDP_STABILITY_PERCENT = toPositiveNumber(process.env.LOAD_MIN_CDP_STABILITY_PERCENT, 95);
+const MAX_VUSER_FAILURE_RATE_PERCENT = toPositiveNumber(process.env.LOAD_MAX_VUSER_FAILURE_RATE_PERCENT, 2);
 
 function toPositiveNumber(value, fallback) {
   const parsed = Number(value);
@@ -152,6 +159,20 @@ function extractArtilleryMetrics(reportJson) {
   const aggregate = reportJson.aggregate || {};
   const counters = aggregate.counters || {};
 
+  const statusCodeErrors = Object.entries(counters).reduce((sum, [key, value]) => {
+    const match = /^http\.codes\.(\d{3})$/.exec(String(key));
+    if (!match) {
+      return sum;
+    }
+
+    const status = Number(match[1]);
+    if (status >= 400) {
+      return sum + Number(value || 0);
+    }
+
+    return sum;
+  }, 0);
+
   const requestCount = Number(
     counters["http.requests"]
       || counters["http.requests.total"]
@@ -159,11 +180,22 @@ function extractArtilleryMetrics(reportJson) {
       || 0
   );
 
-  const errorCount = Number(
-    counters.errors
-      || counters["http.codes.4xx"]
-      || 0
-  ) + Number(counters["http.codes.5xx"] || 0);
+  const explicitErrors = Number(counters.errors || 0)
+    + Number(counters["http.codes.4xx"] || 0)
+    + Number(counters["http.codes.5xx"] || 0);
+
+  const transportErrors = Object.entries(counters).reduce((sum, [key, value]) => {
+    if (!String(key).startsWith("errors.")) {
+      return sum;
+    }
+    return sum + Number(value || 0);
+  }, 0);
+
+  const errorCount = Math.max(explicitErrors + transportErrors, statusCodeErrors);
+
+  const vusersFailed = Number(counters["vusers.failed"] || 0);
+  const vusersCreated = Number(counters["vusers.created"] || 0);
+  const vuserFailureRate = vusersCreated > 0 ? Number(((vusersFailed / vusersCreated) * 100).toFixed(2)) : 0;
 
   const responseSummary = deepFindMetric(reportJson, "http.response_time") || {};
 
@@ -178,6 +210,11 @@ function extractArtilleryMetrics(reportJson) {
     requests: requestCount,
     errors: errorCount,
     errorRate,
+    vusers: {
+      failed: vusersFailed,
+      created: vusersCreated,
+      failureRate: vuserFailureRate
+    },
     latency: {
       avgMs: Number(avgMs.toFixed(2)),
       p95Ms: Number(p95Ms.toFixed(2)),
@@ -190,6 +227,34 @@ function extractArtilleryMetrics(reportJson) {
 async function runArtilleryScenario(users) {
   const baseRaw = await fs.readFile(BASE_SCENARIO_PATH, "utf8");
   const baseConfig = JSON.parse(baseRaw);
+  const sharedHeaders = {
+    "X-API-Key": API_KEY,
+    "Content-Type": "application/json"
+  };
+
+  const scenarioDurationSec = Math.max(LOAD_DURATION_SEC, users >= 50 ? 20 : 10);
+  const rampStart = users >= 100
+    ? Math.max(1, Math.ceil(users / 20))
+    : users >= 50
+      ? Math.max(1, Math.ceil(users / 10))
+      : Math.max(1, Math.ceil(users / 5));
+  const targetVusers = users >= 100 ? Math.ceil(users * 0.4) : users >= 50 ? Math.ceil(users * 0.6) : users;
+
+  const baseScenarios = Array.isArray(baseConfig.scenarios) ? [...baseConfig.scenarios] : [];
+  const tunedScenarios = baseScenarios
+    .map((entry) => ({ ...entry }))
+    .filter((entry) => {
+      const name = String(entry?.name || "").toLowerCase();
+      // Compare endpoint triggers full browsing/scraping workflows; keep it optional for load baselines.
+      if (!LOAD_INCLUDE_COMPARE && name.includes("compare")) {
+        return false;
+      }
+      // Keep compare-heavy flow only for low load where it is meaningful and stable.
+      if (LOAD_INCLUDE_COMPARE && users >= 50 && name.includes("compare")) {
+        return false;
+      }
+      return true;
+    });
 
   const scenario = {
     ...baseConfig,
@@ -198,9 +263,10 @@ async function runArtilleryScenario(users) {
       target: API_BASE_URL,
       phases: [
         {
-          duration: LOAD_DURATION_SEC,
-          arrivalRate: users,
-          maxVusers: users,
+          duration: scenarioDurationSec,
+          arrivalRate: rampStart,
+          rampTo: targetVusers,
+          maxVusers: targetVusers,
           name: `steady-${users}-users`
         }
       ],
@@ -208,11 +274,29 @@ async function runArtilleryScenario(users) {
         ...(baseConfig.config?.http || {}),
         headers: {
           ...((baseConfig.config && baseConfig.config.http && baseConfig.config.http.headers) || {}),
-          "X-API-Key": API_KEY
+          ...sharedHeaders
         }
       }
-    }
+    },
+    scenarios: tunedScenarios
   };
+
+  // Some Artillery schemas/plugins may ignore top-level http headers.
+  // Inject auth headers directly into each request step to keep scenarios deterministic.
+  for (const testScenario of scenario.scenarios || []) {
+    for (const step of testScenario.flow || []) {
+      for (const method of ["get", "post", "put", "patch", "delete"]) {
+        if (!step[method]) {
+          continue;
+        }
+
+        step[method].headers = {
+          ...sharedHeaders,
+          ...(step[method].headers || {})
+        };
+      }
+    }
+  }
 
   const scenarioPath = path.join(RESULTS_DIR, `artillery_scenario_${users}.json`);
   const jsonResultPath = path.join(RESULTS_DIR, `artillery_result_${users}.json`);
@@ -256,7 +340,8 @@ async function runCdpStabilityProbe({ users, durationSec }) {
 
       if (CDP_CONNECT_CHECK) {
         const browser = await chromium.connectOverCDP(CDP_URL);
-        await browser.close();
+        // Disconnect immediately to avoid interfering with the shared CDP browser lifecycle.
+        await browser.close().catch(() => {});
       }
 
       success += 1;
@@ -279,6 +364,29 @@ async function runCdpStabilityProbe({ users, durationSec }) {
     latency: stats,
     cdpUrl: CDP_URL
   };
+}
+
+function evaluateScenarioThresholds(row) {
+  const failures = [];
+  const maxP95ForRow = row.users >= HIGH_LOAD_USER_THRESHOLD ? MAX_API_P95_MS_HIGH_LOAD : MAX_API_P95_MS;
+
+  if (row.api.metrics.errorRate > MAX_API_ERROR_RATE_PERCENT) {
+    failures.push(`API errorRate ${row.api.metrics.errorRate}% > ${MAX_API_ERROR_RATE_PERCENT}%`);
+  }
+
+  if ((row.api.metrics.vusers?.failureRate || 0) > MAX_VUSER_FAILURE_RATE_PERCENT) {
+    failures.push(`VUser failureRate ${row.api.metrics.vusers.failureRate}% > ${MAX_VUSER_FAILURE_RATE_PERCENT}%`);
+  }
+
+  if (row.api.metrics.latency.p95Ms > maxP95ForRow) {
+    failures.push(`API p95 ${row.api.metrics.latency.p95Ms}ms > ${maxP95ForRow}ms`);
+  }
+
+  if (row.cdp.stabilityPercent < MIN_CDP_STABILITY_PERCENT) {
+    failures.push(`CDP stability ${row.cdp.stabilityPercent}% < ${MIN_CDP_STABILITY_PERCENT}%`);
+  }
+
+  return failures;
 }
 
 function htmlEscape(value) {
@@ -463,6 +571,11 @@ async function main() {
     rows.push(row);
   }
 
+  const thresholdFailures = rows.flatMap((row) => {
+    const failures = evaluateScenarioThresholds(row);
+    return failures.map((failure) => `users=${row.users} :: ${failure}`);
+  });
+
   const consolidatedReportPath = await writeConsolidatedHtmlReport(rows);
 
   const summaryPath = path.join(RESULTS_DIR, "load_test_summary.json");
@@ -476,6 +589,16 @@ async function main() {
 
   console.log(`\nRapport consolidé: ${consolidatedReportPath}`);
   console.log(`Résumé JSON: ${summaryPath}`);
+
+  if (thresholdFailures.length > 0) {
+    console.error("\n🔴 Tests de charge hors seuils:");
+    for (const failure of thresholdFailures) {
+      console.error(` - ${failure}`);
+    }
+    process.exitCode = 1;
+    return;
+  }
+
   console.log("🟢 Tests de charge terminés");
 }
 

@@ -33,14 +33,46 @@ class ComparisonsController < ApplicationController
 
     return unless enforce_quota!(items: items, mode: mode)
 
+    unless ComparisonResilience.allow_request?(scope: "web_user", identifier: current_user&.id || request.remote_ip, limit: 8, period: 1.minute)
+      return render_validation_error("Trop de demandes en peu de temps. Merci de patienter une minute.")
+    end
+
+    signature = ComparisonResilience.build_signature(
+      items: items,
+      strategy: strategy,
+      mode: mode,
+      store: store,
+      city: city
+    )
+
     result_id = SecureRandom.uuid
+
+    cached_result = ComparisonResilience.fetch_cached_result(signature, namespace: "web")
+    if cached_result.present?
+      Rails.cache.write(
+        cache_key_for(result_id),
+        cached_result.merge(processing: false, cached: true),
+        expires_in: 30.minutes
+      )
+
+      respond_to do |format|
+        format.html { redirect_to comparison_path(result_id), status: :see_other }
+        format.json { render json: { id: result_id, redirect: comparison_path(result_id), cached: true } }
+        format.turbo_stream { redirect_to comparison_path(result_id), status: :see_other }
+      end
+      return
+    end
+
+    unless ComparisonResilience.acquire_queue_slot
+      return render_validation_error("File d'attente saturée, merci de réessayer dans quelques instants.")
+    end
 
     Rails.logger.info(
       "[ComparisonsController] Launching job result_id=#{result_id} mode=#{mode} " \
       "store=#{store.inspect} items_count=#{items.size} strategy=#{strategy}"
     )
 
-    BuildComparisonJob.perform_later(result_id, items, strategy, mode, store, city)
+    BuildComparisonJob.perform_later(result_id, items, strategy, mode, store, city, signature)
     track_comparison_usage!(items_count: items.size)
 
     Rails.cache.write(
@@ -56,6 +88,7 @@ class ComparisonsController < ApplicationController
     end
   rescue StandardError => e
     Rails.logger.error("[ComparisonsController] create failed: #{e.class} – #{e.message}")
+    ComparisonResilience.release_queue_slot
     result_id = SecureRandom.uuid
     Rails.cache.write(
       cache_key_for(result_id),

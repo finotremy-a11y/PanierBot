@@ -13,10 +13,10 @@
   <%# Header with query and store badge -%>
   <div class="flex items-start justify-between gap-3">
     <div class="min-w-0 flex-1">
-      <p class="text-xs font-semibold uppercase tracking-widest text-indigo-600 group-hover:text-indigo-700 transition-colors">
+      <p class="text-xs font-semibold uppercase tracking-widest text-[#2d5a27] group-hover:text-[#154212] transition-colors">
         Produit demandé
       </p>
-      <h3 class="mt-1.5 truncate text-lg font-bold text-slate-900 group-hover:text-indigo-700 transition-colors">
+      <h3 class="mt-1.5 truncate text-lg font-bold text-[#1b1c1c] group-hover:text-[#2d5a27] transition-colors">
         <%= query.capitalize %>
       </h3>
     </div>
@@ -28,29 +28,29 @@
   </div>
 
   <%# Divider with gradient -%>
-  <div class="my-4 h-px bg-gradient-to-r from-slate-200 via-slate-200 to-transparent"></div>
+  <div class="my-4 h-px bg-gradient-to-r from-[#c2c9bb] via-[#c2c9bb] to-transparent"></div>
 
   <%# Winner product info - Enhanced presentation -%>
   <% if wp[:name].present? %>
     <div class="space-y-4">
       <%# Product name -%>
       <div>
-        <p class="truncate text-base font-semibold text-slate-800 group-hover:text-slate-900 transition-colors" 
+        <p class="truncate text-base font-semibold text-[#42493e] group-hover:text-[#1b1c1c] transition-colors" 
            title="<%= wp[:name] %>">
           <%= wp[:name] %>
         </p>
         <% if wp[:quantity].present? %>
-          <p class="mt-1 text-sm text-slate-600">
+          <p class="mt-1 text-sm text-[#72796e]">
             📦 <%= wp[:quantity] %>
           </p>
         <% end %>
       </div>
 
       <%# Price section - Highlighted -%>
-      <div class="rounded-xl bg-gradient-to-br from-indigo-50 to-blue-50 p-4 ring-1 ring-indigo-100">
-        <p class="text-xs font-semibold uppercase tracking-wide text-indigo-600">Prix</p>
+      <div class="rounded-xl bg-gradient-to-br from-[#ecf9e8] to-[#d9e6da] p-4 ring-1 ring-[#a1d494]">
+        <p class="text-xs font-semibold uppercase tracking-wide text-[#2d5a27]">Prix</p>
         <% if wp[:price].present? && wp[:price].to_f > 0 %>
-          <p class="mt-2 text-3xl font-extrabold text-slate-900">
+          <p class="mt-2 text-3xl font-extrabold tracking-[0.02em] text-[#1b1c1c]">
             <%= number_to_currency(wp[:price].to_f, unit: "€", separator: ",", delimiter: " ", precision: 2, format: "%n %u") rescue "#{wp[:price]} €" %>
           </p>
         <% end %>
@@ -60,19 +60,19 @@
         <% if has_unit_price %>
           <div class="mt-3 flex flex-wrap gap-2">
             <% if wp[:price_per_kg].present? && wp[:price_per_kg].to_f > 0 %>
-              <div class="rounded-lg bg-white/60 px-2.5 py-1.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+              <div class="rounded-lg bg-white/70 px-2.5 py-1.5 text-xs font-medium text-[#42493e] ring-1 ring-[#c2c9bb]">
                 ⚖️ <%= "%.2f" % wp[:price_per_kg].to_f %> €/kg
               </div>
             <% end %>
 
             <% if wp[:price_per_l].present? && wp[:price_per_l].to_f > 0 %>
-              <div class="rounded-lg bg-white/60 px-2.5 py-1.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+              <div class="rounded-lg bg-white/70 px-2.5 py-1.5 text-xs font-medium text-[#42493e] ring-1 ring-[#c2c9bb]">
                 🥛 <%= "%.2f" % wp[:price_per_l].to_f %> €/L
               </div>
             <% end %>
 
             <% if wp[:price_per_unit].present? && wp[:price_per_unit].to_f > 0 %>
-              <div class="rounded-lg bg-white/60 px-2.5 py-1.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+              <div class="rounded-lg bg-white/70 px-2.5 py-1.5 text-xs font-medium text-[#42493e] ring-1 ring-[#c2c9bb]">
                 🔢 <%= "%.2f" % wp[:price_per_unit].to_f %> €/u
               </div>
             <% end %>
@@ -84,7 +84,7 @@
       <button type="button"
               data-action="click->product-details#toggle"
               data-product-details-target="trigger"
-              class="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-indigo-600 transition-all hover:bg-indigo-50 hover:border-indigo-300 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2">
+              class="flex w-full items-center justify-center gap-2 rounded-lg border border-[#c2c9bb] bg-white px-3 py-2.5 text-sm font-medium text-[#2d5a27] transition-all hover:border-[#a1d494] hover:bg-[#ecf9e8] focus-visible:ring-2 focus-visible:ring-[#2d5a27] focus-visible:ring-offset-2">
         <svg class="h-4 w-4 transition-transform duration-200" 
              data-product-details-target="icon"
              fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -97,12 +97,12 @@
       <div class="overflow-hidden transition-all duration-300" 
            data-product-details-target="panel"
            style="max-height: 0; opacity: 0;">
-        <div class="space-y-3 border-t border-slate-200 pt-4 mt-4">
+        <div class="mt-4 space-y-3 border-t border-[#c2c9bb] pt-4">
           <% if wp[:url].present? %>
             <div class="space-y-2">
-              <p class="text-xs font-semibold text-slate-600 uppercase tracking-wide">Produit</p>
+              <p class="text-xs font-semibold uppercase tracking-wide text-[#72796e]">Produit</p>
               <a href="<%= wp[:url] %>" target="_blank" rel="noopener noreferrer"
-                 class="inline-flex items-center gap-2 rounded-lg bg-indigo-100 px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-200 transition-colors">
+                 class="inline-flex items-center gap-2 rounded-lg bg-[#ecf9e8] px-3 py-2 text-sm font-medium text-[#2d5a27] hover:bg-[#d9e6da] transition-colors">
                 Ouvrir <%= winner_store.capitalize %>
                 <%= render "shared/icon", name: "arrow-right", size: "xs" %>
               </a>
@@ -111,8 +111,8 @@
           
           <% if winner_store.present? %>
             <div>
-              <p class="text-xs font-semibold text-slate-600 uppercase tracking-wide">Enseigne gagnante</p>
-              <p class="mt-1 text-sm text-slate-700 font-medium"><%= winner_store.capitalize %></p>
+              <p class="text-xs font-semibold uppercase tracking-wide text-[#72796e]">Enseigne gagnante</p>
+              <p class="mt-1 text-sm font-medium text-[#42493e]"><%= winner_store.capitalize %></p>
             </div>
           <% end %>
         </div>
@@ -121,11 +121,11 @@
 
   <% else %>
     <%# Not found state -%>
-    <div class="rounded-lg border border-amber-200 bg-amber-50 p-4">
-      <p class="text-sm font-semibold text-amber-900">
+    <div class="rounded-lg border border-[#fcd34d] bg-[#fff7d7] p-4">
+      <p class="text-sm font-semibold text-[#92400e]">
         ⚠️ Produit non trouvé
       </p>
-      <p class="mt-1 text-xs text-amber-700">
+      <p class="mt-1 text-xs text-[#92400e]">
         Aucune correspondance trouvée dans les drives de cette enseigne.
       </p>
     </div>

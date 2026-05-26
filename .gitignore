@@ -10,6 +10,10 @@
 # Ignore all environment files.
 /.env*
 
+# Local browser auth states must never be versioned.
+/auth.json
+/playwright/auth.json
+
 # Ignore all logfiles and tempfiles.
 /log/*
 /tmp/*

@@ -1,6 +1,7 @@
 class Rack::Attack
   RATE_LIMIT_LOG_MESSAGE = "⛔ Rate limit triggered".freeze
   API_COMPARE_PATH = "/api/v1/compare".freeze
+  WEB_COMPARE_PATH = "/compare".freeze
 
   cache.store = if Rails.cache.is_a?(ActiveSupport::Cache::NullStore)
     ActiveSupport::Cache::MemoryStore.new
@@ -21,6 +22,10 @@ class Rack::Attack
 
     user = rack_attack_user(req)
     user.id if user&.free?
+  end
+
+  throttle("web/compare/ip", limit: 8, period: 1.minute) do |req|
+    req.ip if req.post? && req.path == WEB_COMPARE_PATH
   end
 
   throttle("auth/ip", limit: 20, period: 1.minute) do |req|

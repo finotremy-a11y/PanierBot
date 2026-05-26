@@ -14,6 +14,7 @@ const args = minimist(process.argv.slice(2), {
 });
 
 const items = String(args.items || "pâtes,lait").split(",").map((item) => item.trim()).filter(Boolean);
+const requireLiveAudit = String(process.env.REQUIRE_LIVE_AUDIT || "0") === "1";
 
 console.log("\n🌍 Démarrage Audit Global Multi-Enseignes");
 console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -33,6 +34,10 @@ if (!result.items.every((entry) => entry.winnerProduct)) {
   throw new Error("Audit global: produit gagnant manquant");
 }
 
+if (requireLiveAudit && !result.live) {
+  throw new Error("Audit global: fallback offline utilisé alors que REQUIRE_LIVE_AUDIT=1");
+}
+
 console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-console.log("🟢 Audit global validé (CDP)");
-console.log("🟢🟢🟢 VALIDATION FINALE — 100% VERT (CDP ONLY) 🟢🟢🟢\n");
+console.log(`🟢 Audit global validé (${result.live ? "CDP" : "fallback offline"})`);
+console.log(`🟢🟢🟢 VALIDATION FINALE — 100% VERT (${result.live ? "CDP" : "FALLBACK OFFLINE"}) 🟢🟢🟢\n`);

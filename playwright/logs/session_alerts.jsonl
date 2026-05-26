@@ -1,0 +1,25 @@
+{"timestamp":"2026-05-26T11:51:04.837Z","kind":"session-expired","message":"Leclerc: session manuelle absente ou expirée","store":"leclerc","scope":"global"}
+{"timestamp":"2026-05-26T11:51:04.839Z","kind":"session-expired","message":"Carrefour: session manuelle absente ou expirée","store":"carrefour","scope":"global"}
+{"timestamp":"2026-05-26T11:51:04.840Z","kind":"session-expired","message":"Intermarche: session manuelle absente ou expirée","store":"intermarche","scope":"global"}
+{"timestamp":"2026-05-26T11:51:04.841Z","kind":"session-expired","message":"Super U: session manuelle absente ou expirée","store":"superu","scope":"global"}
+{"timestamp":"2026-05-26T11:55:28.825Z","kind":"session-expired","message":"Leclerc: session manuelle absente ou expirée","store":"leclerc","scope":"global"}
+{"timestamp":"2026-05-26T11:55:28.827Z","kind":"session-expired","message":"Carrefour: session manuelle absente ou expirée","store":"carrefour","scope":"global"}
+{"timestamp":"2026-05-26T11:55:28.828Z","kind":"session-expired","message":"Intermarche: session manuelle absente ou expirée","store":"intermarche","scope":"global"}
+{"timestamp":"2026-05-26T11:55:28.828Z","kind":"session-expired","message":"Super U: session manuelle absente ou expirée","store":"superu","scope":"global"}
+{"timestamp":"2026-05-26T12:00:15.934Z","kind":"session-expired","message":"Leclerc: session manuelle absente ou expirée","store":"leclerc","scope":"global"}
+{"timestamp":"2026-05-26T12:00:15.937Z","kind":"session-expired","message":"Carrefour: session manuelle absente ou expirée","store":"carrefour","scope":"global"}
+{"timestamp":"2026-05-26T12:00:15.938Z","kind":"session-expired","message":"Intermarche: session manuelle absente ou expirée","store":"intermarche","scope":"global"}
+{"timestamp":"2026-05-26T12:00:15.940Z","kind":"session-expired","message":"Super U: session manuelle absente ou expirée","store":"superu","scope":"global"}
+{"timestamp":"2026-05-26T14:58:17.987Z","kind":"session-expiring","message":"Intermarche: blocage anti-bot détecté pendant audit global","store":"intermarche","scope":"global","reason":"Intermarche: sélection magasin échouée (Acces bloque par anti-bot/captcha Intermarche (verification JS requise))"}
+{"timestamp":"2026-05-26T15:00:06.415Z","kind":"audit-failure","message":"Echec audit global","reason":"Ajout panier global échoué (Carrefour: Boutons produit Carrefour introuvables)","attempt":1,"maxRetries":4}
+{"timestamp":"2026-05-26T15:01:11.298Z","kind":"audit-failure","message":"Echec audit global","reason":"Ajout panier global échoué (Carrefour: Boutons produit Carrefour introuvables)","attempt":2,"maxRetries":4}
+{"timestamp":"2026-05-26T15:02:27.676Z","kind":"audit-failure","message":"Echec audit global","reason":"Ajout panier global échoué (Carrefour: Boutons produit Carrefour introuvables)","attempt":3,"maxRetries":4}
+{"timestamp":"2026-05-26T15:03:36.238Z","kind":"audit-failure","message":"Echec audit global","reason":"Ajout panier global échoué (Carrefour: Boutons produit Carrefour introuvables)","attempt":4,"maxRetries":4}
+{"timestamp":"2026-05-26T15:15:09.064Z","kind":"session-expired","message":"Leclerc: session manuelle absente ou expirée","store":"leclerc","scope":"global"}
+{"timestamp":"2026-05-26T15:15:09.066Z","kind":"session-expired","message":"Carrefour: session manuelle absente ou expirée","store":"carrefour","scope":"global"}
+{"timestamp":"2026-05-26T15:15:09.067Z","kind":"session-expired","message":"Intermarche: session manuelle absente ou expirée","store":"intermarche","scope":"global"}
+{"timestamp":"2026-05-26T15:15:09.068Z","kind":"session-expired","message":"Super U: session manuelle absente ou expirée","store":"superu","scope":"global"}
+{"timestamp":"2026-05-26T15:21:04.302Z","kind":"session-expiring","message":"Intermarche: blocage anti-bot détecté pendant audit mono-enseigne","store":"intermarche","scope":"single-store","reason":"Sélection magasin: Acces bloque par anti-bot/captcha Intermarche (verification JS requise)"}
+{"timestamp":"2026-05-26T15:21:06.651Z","kind":"session-expiring","message":"Intermarche: blocage anti-bot détecté pendant audit mono-enseigne","store":"intermarche","scope":"single-store","reason":"Sélection magasin: Acces bloque par anti-bot/captcha Intermarche (verification JS requise)"}
+{"timestamp":"2026-05-26T15:21:09.009Z","kind":"session-expiring","message":"Intermarche: blocage anti-bot détecté pendant audit mono-enseigne","store":"intermarche","scope":"single-store","reason":"Sélection magasin: Acces bloque par anti-bot/captcha Intermarche (verification JS requise)"}
+{"timestamp":"2026-05-26T15:21:11.373Z","kind":"session-expiring","message":"Intermarche: blocage anti-bot détecté pendant audit mono-enseigne","store":"intermarche","scope":"single-store","reason":"Sélection magasin: Acces bloque par anti-bot/captcha Intermarche (verification JS requise)"}

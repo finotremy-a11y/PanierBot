@@ -22,6 +22,17 @@ import {
 const DEFAULT_CDP_URL = "http://localhost:9222";
 const DEFAULT_MONITOR_PATH = path.resolve(process.cwd(), "logs", "selectors.json");
 const CRITICAL_KEYS = ["searchBar", "productCards", "price", "pricePerKg", "addToCart"];
+const DEFAULT_CDP_CONNECT_TIMEOUT_MS = 25000;
+const DEFAULT_CDP_CONNECT_RETRIES = 3;
+const DEFAULT_CAPTCHA_POLICY = "skip-store";
+const CAPTCHA_INDICATORS = [
+  "captcha-delivery.com",
+  "hcaptcha.com",
+  "recaptcha",
+  "datadome",
+  "cloudflare",
+  "challenge"
+];
 
 const STORE_MONITOR_DEFINITIONS = Object.freeze({
   leclerc: {
@@ -119,9 +130,9 @@ const DEFAULT_SELECTOR_REGISTRY = Object.freeze({
   leclerc: {
     searchBar: ["input[name='q']", "input[type='search']", "input[placeholder*='recherche' i]", "header input[type='search']"],
     productCards: ["li.liWCRS310_Product", "[data-product-id]", "article[class*='product' i]", "li[class*='product' i]"],
-    price: ["[class*='price' i]", "[data-testid*='price' i]", ".pWCRS310_PrixUnitaire"],
+    price: [".pWCRS310_PrixUnitaire", ".pWCRS310_PrixUnitairePartieEntiere", "[class*='PrixUnitaire' i]", "[class*='prix' i]", "[class*='price' i]", "[data-testid*='price' i]"],
     pricePerKg: ["[class*='PrixUniteMesure' i]", "[class*='unit' i]", "[class*='kg' i]"],
-    addToCart: ["a.aWCRS310_Add_Produit_Fiche", "button:has-text('Ajouter au panier')", "button:has-text('Ajouter')"]
+    addToCart: [".aWCRS310_Add", "a.aWCRS310_Add_Produit_Fiche", "a[aria-label*='Ajout produit' i]", "a:has-text('Ajouter au panier')", "button:has-text('Ajouter au panier')", "button:has-text('Ajouter')"]
   },
   carrefour: {
     searchBar: ["input[name='q']", "#vendor-search-handler", "input[type='search']", "input[aria-label*='rechercher' i]"],
@@ -148,6 +159,14 @@ const DEFAULT_SELECTOR_REGISTRY = Object.freeze({
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function normalizeCaptchaPolicy(value) {
+  const policy = String(value || DEFAULT_CAPTCHA_POLICY).toLowerCase().trim();
+  if (["skip-store", "fail-run"].includes(policy)) {
+    return policy;
+  }
+  return DEFAULT_CAPTCHA_POLICY;
 }
 
 function unique(values) {
@@ -233,7 +252,45 @@ async function ensureHomePage(page, homeUrl) {
   await page.waitForTimeout(1200);
 }
 
-async function testSelector(page, selector) {
+async function detectAntiBotChallenge(page) {
+  try {
+    const snapshot = await page.evaluate((indicators) => {
+      const text = String(document.body?.innerText || "").toLowerCase().replace(/\s+/g, " ");
+      const frames = Array.from(document.querySelectorAll("iframe")).map((frame) => String(frame.src || "").toLowerCase()).filter(Boolean);
+      const matchedFrame = frames.find((frameUrl) => indicators.some((needle) => frameUrl.includes(needle))) || null;
+      const matchedText = indicators.find((needle) => text.includes(needle)) || null;
+
+      return {
+        bodyLength: text.trim().length,
+        matchedFrame,
+        matchedText,
+        hasChallengeWidget: Boolean(document.querySelector("iframe[src*='captcha' i], iframe[src*='challenge' i], [id*='captcha' i], [class*='captcha' i]"))
+      };
+    }, CAPTCHA_INDICATORS);
+
+    const blocked = Boolean(snapshot.matchedFrame || snapshot.matchedText || snapshot.hasChallengeWidget || snapshot.bodyLength === 0);
+    if (!blocked) {
+      return { blocked: false, reason: null };
+    }
+
+    const reason = snapshot.matchedFrame
+      ? `iframe challenge détectée (${snapshot.matchedFrame})`
+      : snapshot.matchedText
+        ? `texte challenge détecté (${snapshot.matchedText})`
+        : snapshot.bodyLength === 0
+          ? "DOM vide (challenge probable)"
+          : "widget challenge détecté";
+
+    return { blocked: true, reason };
+  } catch (error) {
+    return {
+      blocked: true,
+      reason: `impossible d'inspecter la page (${error.message})`
+    };
+  }
+}
+
+async function testSelector(page, selector, criticalKey = null) {
   if (!selector) {
     return false;
   }
@@ -245,8 +302,50 @@ async function testSelector(page, selector) {
       return false;
     }
 
+    const semanticOk = await page.evaluate(({ css, key }) => {
+      const nodes = Array.from(document.querySelectorAll(css)).slice(0, 8);
+      if (nodes.length === 0) {
+        return false;
+      }
+
+      const visibleNodes = nodes.filter((node) => {
+        const rect = node.getBoundingClientRect();
+        return rect.width > 2 && rect.height > 2;
+      });
+      const candidates = visibleNodes.length > 0 ? visibleNodes : nodes;
+
+      const textOf = (node) => String(node.textContent || node.getAttribute("aria-label") || "").toLowerCase().replace(/\s+/g, " ").trim();
+
+      if (key === "searchBar") {
+        return candidates.some((node) => {
+          const tag = String(node.tagName || "").toLowerCase();
+          if (tag !== "input") return false;
+          const type = String(node.getAttribute("type") || "text").toLowerCase();
+          return ["search", "text"].includes(type);
+        });
+      }
+
+      if (key === "productCards") {
+        return candidates.some((node) => textOf(node).length >= 12);
+      }
+
+      if (key === "price") {
+        return candidates.some((node) => /€|\d+[\.,]\d{2}/.test(textOf(node)));
+      }
+
+      if (key === "pricePerKg") {
+        return candidates.some((node) => /(kg|g|l|ml|cl|\/kg|\/l|100g|100ml)/.test(textOf(node)));
+      }
+
+      if (key === "addToCart") {
+        return candidates.some((node) => /(ajouter|panier|acheter|add to cart)/.test(textOf(node)));
+      }
+
+      return candidates.length > 0;
+    }, { css: selector, key: criticalKey }).catch(() => false);
+
     const visible = await locator.isVisible({ timeout: 250 }).catch(() => false);
-    return visible || count > 0;
+    return semanticOk && (visible || count > 0);
   } catch (_) {
     return false;
   }
@@ -323,7 +422,7 @@ async function discoverFallbackSelectors(page, criticalKey) {
     }
 
     if (kind === "price") {
-      return pick(document.querySelectorAll("[data-testid*='price' i], [class*='price' i], [class*='amount' i], .by_price"));
+      return pick(document.querySelectorAll("[data-testid*='price' i], [class*='price' i], [class*='prix' i], [class*='PrixUnitaire' i], [class*='amount' i], .by_price"));
     }
 
     if (kind === "pricePerKg") {
@@ -379,7 +478,7 @@ async function repairCriticalSelector({ page, storeKey, criticalKey, state, iter
   const criticalConfig = storeConfig.critical[criticalKey];
   const current = criticalConfig.current;
 
-  if (await testSelector(page, current)) {
+  if (await testSelector(page, current, criticalKey)) {
     return {
       repaired: false,
       ok: true,
@@ -402,7 +501,11 @@ async function repairCriticalSelector({ page, storeKey, criticalKey, state, iter
       continue;
     }
 
-    const works = await testSelector(page, candidate);
+    if (criticalKey === "addToCart" && /montant|prix|price/i.test(candidate)) {
+      continue;
+    }
+
+    const works = await testSelector(page, candidate, criticalKey);
     if (!works) {
       continue;
     }
@@ -472,7 +575,8 @@ async function runStoreDiagnostic({
   query,
   maxRetries,
   maxAutocorrectAttempts,
-  state
+  state,
+  captchaPolicy
 }) {
   const definition = STORE_MONITOR_DEFINITIONS[storeKey];
   if (!definition) {
@@ -480,59 +584,151 @@ async function runStoreDiagnostic({
   }
 
   const context = browser.contexts()[0] || await browser.newContext();
-  const page = context.pages().find((p) => String(p.url() || "").includes(storeKey)) || await context.newPage();
+  const page = await context.newPage();
 
-  for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
-    const profile = MONITOR_PROFILES[(attempt - 1) % MONITOR_PROFILES.length];
-    await ensureHomePage(page, definition.homeUrl);
+  // Keep only one active page to avoid cross-store contamination in helper logic.
+  const siblingPages = context.pages().filter((candidate) => candidate !== page);
+  for (const sibling of siblingPages) {
+    await sibling.close().catch(() => {});
+  }
 
-    const selectResult = await definition.select(page, city, profile);
-    if (selectResult && selectResult.success === false) {
-      if (attempt === maxRetries) {
-        throw new Error(`${definition.label}: sélection magasin échouée (${selectResult.error || "inconnue"})`);
+  try {
+    for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
+      const profile = MONITOR_PROFILES[(attempt - 1) % MONITOR_PROFILES.length];
+      await ensureHomePage(page, definition.homeUrl);
+
+      const homeChallenge = await detectAntiBotChallenge(page);
+      if (homeChallenge.blocked) {
+        const reason = `${definition.label}: challenge anti-bot pendant home (${homeChallenge.reason})`;
+        if (captchaPolicy === "fail-run") {
+          throw new Error(reason);
+        }
+        return {
+          storeKey,
+          label: definition.label,
+          blocked: true,
+          step: "home",
+          reason
+        };
       }
-      continue;
-    }
 
-    const monitorOptions = generateMonitorOptions(state.stores[storeKey].critical, profile);
-    const searchResult = await definition.search(page, query, monitorOptions);
-    if (!searchResult || searchResult.success === false) {
-      if (attempt === maxRetries) {
-        throw new Error(`${definition.label}: recherche échouée (${searchResult?.error || "inconnue"})`);
+      const selectResult = await definition.select(page, city, profile);
+      if (selectResult && selectResult.success === false) {
+        const message = String(selectResult.error || "inconnue");
+        if (/captcha|challenge|datadome|hcaptcha|recaptcha/i.test(message)) {
+          const reason = `${definition.label}: challenge anti-bot pendant selectStore (${message})`;
+          if (captchaPolicy === "fail-run") {
+            throw new Error(reason);
+          }
+          return {
+            storeKey,
+            label: definition.label,
+            blocked: true,
+            step: "selectStore",
+            reason
+          };
+        }
+        const canProceedWithoutSelectionInput = storeKey === "intermarche" && /input.*introuvable/i.test(message);
+
+        if (!canProceedWithoutSelectionInput) {
+          if (attempt === maxRetries) {
+            throw new Error(`${definition.label}: sélection magasin échouée (${message})`);
+          }
+          continue;
+        }
       }
-      continue;
-    }
 
-    const extracted = await definition.extract(page, {
-      limit: 12,
-      timeout: profile.timeout,
-      extraCardSelectors: monitorOptions.extraProductCardSelectors
-    });
+      const monitorOptions = generateMonitorOptions(state.stores[storeKey].critical, profile);
+      const searchResult = await definition.search(page, query, monitorOptions);
+      if (!searchResult || searchResult.success === false) {
+        const message = String(searchResult?.error || "inconnue");
+        if (/captcha|challenge|datadome|hcaptcha|recaptcha/i.test(message)) {
+          const reason = `${definition.label}: challenge anti-bot pendant searchProduct (${message})`;
+          if (captchaPolicy === "fail-run") {
+            throw new Error(reason);
+          }
+          return {
+            storeKey,
+            label: definition.label,
+            blocked: true,
+            step: "searchProduct",
+            reason
+          };
+        }
+        if (attempt === maxRetries) {
+          throw new Error(`${definition.label}: recherche échouée (${message})`);
+        }
+        continue;
+      }
 
-    const extractedProducts = Array.isArray(extracted) ? extracted : [];
-    if (extractedProducts.length === 0 && attempt === maxRetries) {
-      throw new Error(`${definition.label}: extraction vide`);
-    }
+      const searchChallenge = await detectAntiBotChallenge(page);
+      if (searchChallenge.blocked) {
+        const reason = `${definition.label}: challenge anti-bot après recherche (${searchChallenge.reason})`;
+        if (captchaPolicy === "fail-run") {
+          throw new Error(reason);
+        }
+        return {
+          storeKey,
+          label: definition.label,
+          blocked: true,
+          step: "afterSearch",
+          reason
+        };
+      }
 
-    const monitorResult = await monitorExtraction({
-      page,
-      storeKey,
-      state,
-      maxAutocorrectAttempts
-    });
+      let extracted = await definition.extract(page, {
+        limit: 12,
+        timeout: profile.timeout,
+        extraCardSelectors: monitorOptions.extraProductCardSelectors
+      });
 
-    if (!monitorResult.success && attempt === maxRetries) {
-      throw new Error(`${definition.label}: certains sélecteurs restent cassés après auto-correction`);
-    }
+      let extractedProducts = Array.isArray(extracted) ? extracted : [];
+      if (extractedProducts.length === 0) {
+        const alternateQueries = unique([query, "pates", "lait"]).filter((candidate) => candidate && candidate !== query);
+        for (const altQuery of alternateQueries) {
+          const retrySearch = await definition.search(page, altQuery, monitorOptions).catch(() => null);
+          if (!retrySearch || retrySearch.success === false) {
+            continue;
+          }
 
-    if (monitorResult.success) {
-      return {
+          extracted = await definition.extract(page, {
+            limit: 12,
+            timeout: profile.timeout,
+            extraCardSelectors: monitorOptions.extraProductCardSelectors
+          });
+          extractedProducts = Array.isArray(extracted) ? extracted : [];
+          if (extractedProducts.length > 0) {
+            break;
+          }
+        }
+      }
+
+      if (extractedProducts.length === 0 && attempt === maxRetries) {
+        throw new Error(`${definition.label}: extraction vide`);
+      }
+
+      const monitorResult = await monitorExtraction({
+        page,
         storeKey,
-        label: definition.label,
-        extractedCount: extractedProducts.length,
-        rounds: monitorResult.rounds
-      };
+        state,
+        maxAutocorrectAttempts
+      });
+
+      if (!monitorResult.success && attempt === maxRetries) {
+        throw new Error(`${definition.label}: certains sélecteurs restent cassés après auto-correction`);
+      }
+
+      if (monitorResult.success) {
+        return {
+          storeKey,
+          label: definition.label,
+          extractedCount: extractedProducts.length,
+          rounds: monitorResult.rounds
+        };
+      }
     }
+  } finally {
+    await page.close().catch(() => {});
   }
 
   throw new Error(`${definition.label}: diagnostic impossible`);
@@ -543,14 +739,21 @@ async function runDiagnosticMode(args) {
 
   let browser = null;
   try {
-    browser = await chromium.connectOverCDP(args.cdpUrl || DEFAULT_CDP_URL);
+    browser = await connectOverCdpWithRetry({
+      cdpUrl: args.cdpUrl || DEFAULT_CDP_URL,
+      timeoutMs: args.cdpConnectTimeoutMs,
+      retries: args.cdpConnectRetries
+    });
   } catch (error) {
     throw new Error(`CDP indisponible: ${error.message}`);
   }
 
   try {
-    const stores = ["leclerc", "carrefour", "intermarche", "superu"];
+    const stores = Array.isArray(args.stores) && args.stores.length > 0
+      ? args.stores
+      : ["leclerc", "carrefour", "intermarche", "superu"];
     const results = [];
+    const blocked = [];
 
     for (const storeKey of stores) {
       const result = await runStoreDiagnostic({
@@ -560,15 +763,28 @@ async function runDiagnosticMode(args) {
         query: args.query,
         maxRetries: args.maxRetries,
         maxAutocorrectAttempts: args.autocorrectAttempts,
-        state
+        state,
+        captchaPolicy: args.captchaPolicy
       });
-      results.push(result);
+      if (result?.blocked) {
+        blocked.push(result);
+      } else {
+        results.push(result);
+      }
     }
 
     await persistMonitorState(state, args.output);
 
     for (const result of results) {
       console.log(`✅ Diagnostic ${result.label}: ${result.extractedCount} produits, ${result.rounds} passe(s) monitor`);
+    }
+
+    for (const item of blocked) {
+      console.warn(`⚠️ Diagnostic ${item.label} ignoré (anti-bot) | étape=${item.step} | raison=${item.reason}`);
+    }
+
+    if (blocked.length > 0) {
+      console.warn(`⚠️ Monitoring partiel: ${blocked.length} enseigne(s) bloquée(s) par challenge anti-bot`);
     }
 
     console.log("🟢 Monitoring sélecteurs opérationnel");
@@ -578,9 +794,30 @@ async function runDiagnosticMode(args) {
   }
 }
 
+async function connectOverCdpWithRetry({ cdpUrl, timeoutMs, retries }) {
+  const endpoint = cdpUrl || DEFAULT_CDP_URL;
+  const maxRetries = Math.max(1, Number(retries) || DEFAULT_CDP_CONNECT_RETRIES);
+  const connectTimeoutMs = Math.max(3000, Number(timeoutMs) || DEFAULT_CDP_CONNECT_TIMEOUT_MS);
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
+    try {
+      return await chromium.connectOverCDP(endpoint, { timeout: connectTimeoutMs });
+    } catch (error) {
+      lastError = error;
+      console.warn(`⚠️ Connexion CDP échouée (${attempt}/${maxRetries}): ${error.message}`);
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+      }
+    }
+  }
+
+  throw lastError || new Error("Connexion CDP impossible");
+}
+
 function parseArgs() {
   const args = minimist(process.argv.slice(2), {
-    string: ["mode", "city", "query", "cdp-url", "output"],
+    string: ["mode", "city", "query", "cdp-url", "output", "cdp-connect-timeout-ms", "cdp-connect-retries", "captcha-policy", "stores"],
     default: {
       mode: "diagnostic",
       city: "Paris",
@@ -588,6 +825,10 @@ function parseArgs() {
       "max-retries": 4,
       "autocorrect-attempts": 6,
       "cdp-url": DEFAULT_CDP_URL,
+      "cdp-connect-timeout-ms": DEFAULT_CDP_CONNECT_TIMEOUT_MS,
+      "cdp-connect-retries": DEFAULT_CDP_CONNECT_RETRIES,
+      "captcha-policy": DEFAULT_CAPTCHA_POLICY,
+      stores: "leclerc,carrefour,intermarche,superu",
       output: DEFAULT_MONITOR_PATH
     }
   });
@@ -608,6 +849,10 @@ function parseArgs() {
     city: readArg(args.city, "Paris"),
     query: readArg(args.query, "pâtes"),
     cdpUrl: readArg(args["cdp-url"], DEFAULT_CDP_URL),
+    cdpConnectTimeoutMs: Math.max(3000, parseInt(readArg(args["cdp-connect-timeout-ms"], String(DEFAULT_CDP_CONNECT_TIMEOUT_MS)), 10)),
+    cdpConnectRetries: Math.max(1, parseInt(readArg(args["cdp-connect-retries"], String(DEFAULT_CDP_CONNECT_RETRIES)), 10)),
+    captchaPolicy: normalizeCaptchaPolicy(readArg(args["captcha-policy"], DEFAULT_CAPTCHA_POLICY)),
+    stores: unique(readArg(args.stores, "leclerc,carrefour,intermarche,superu").split(",").map((entry) => entry.trim().toLowerCase())).filter((storeKey) => Object.prototype.hasOwnProperty.call(STORE_MONITOR_DEFINITIONS, storeKey)),
     maxRetries: Math.max(1, parseInt(readArg(args["max-retries"], "4"), 10)),
     autocorrectAttempts: Math.max(1, parseInt(readArg(args["autocorrect-attempts"], "6"), 10)),
     output: path.resolve(process.cwd(), readArg(args.output, DEFAULT_MONITOR_PATH))
@@ -619,6 +864,10 @@ async function main() {
 
   if (args.mode !== "diagnostic") {
     throw new Error(`Mode non supporté: ${args.mode} (mode attendu: diagnostic)`);
+  }
+
+  if (!Array.isArray(args.stores) || args.stores.length === 0) {
+    throw new Error("Aucune enseigne valide fournie (utiliser --stores=leclerc,carrefour,intermarche,superu)");
   }
 
   const result = await runDiagnosticMode(args);

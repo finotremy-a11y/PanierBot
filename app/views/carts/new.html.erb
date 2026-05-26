@@ -4,13 +4,13 @@
 <div class="space-y-6 py-10">
   <%# ── Hero section ── %>
   <div class="mx-auto max-w-3xl px-4 text-center sm:px-6">
-    <div class="inline-block rounded-full bg-indigo-100 px-4 py-2 text-sm font-semibold text-indigo-700 ring-1 ring-indigo-200">
+    <div class="inline-block rounded-full bg-[#ecf9e8] px-4 py-2 text-sm font-semibold text-[#2d5a27] ring-1 ring-[#a1d494]">
       ✨ Nouvelle comparaison
     </div>
-    <h1 class="mt-4 text-3xl font-extrabold text-slate-900 sm:text-4xl">
+    <h1 class="mt-4 text-3xl font-extrabold text-[#1b1c1c] sm:text-4xl">
       Comparez vos courses
     </h1>
-    <p class="mt-4 text-lg text-slate-600">
+    <p class="mt-4 text-lg text-[#42493e]">
       Trouvez les meilleurs prix en drive en quelques secondes.
     </p>
   </div>
@@ -30,18 +30,18 @@
             <label class="group relative cursor-pointer">
               <input type="radio" name="cart[store]" value="<%= store %>" 
                      class="sr-only peer" required aria-label="<%= store.capitalize %>">
-              <div class="rounded-lg border-2 border-slate-200 bg-white px-4 py-3 transition-all peer-checked:border-indigo-600 peer-checked:bg-indigo-50 hover:border-slate-300 peer-focus:ring-2 peer-focus:ring-indigo-500 peer-focus:ring-offset-2">
+              <div class="rounded-lg border-2 border-[#c2c9bb] bg-white px-4 py-3 transition-all peer-checked:border-[#2d5a27] peer-checked:bg-[#ecf9e8] hover:border-[#a1d494] peer-focus:ring-2 peer-focus:ring-[#2d5a27] peer-focus:ring-offset-2">
                 <% case store.downcase %>
                   <% when "leclerc" %>
-                    <p class="font-semibold text-slate-900">🏪 E.Leclerc</p>
+                    <p class="font-semibold text-[#1b1c1c]">🏪 E.Leclerc</p>
                   <% when "carrefour" %>
-                    <p class="font-semibold text-slate-900">🛒 Carrefour</p>
+                    <p class="font-semibold text-[#1b1c1c]">🛒 Carrefour</p>
                   <% when "intermarche" %>
-                    <p class="font-semibold text-slate-900">🏬 Intermarché</p>
+                    <p class="font-semibold text-[#1b1c1c]">🏬 Intermarché</p>
                   <% when "super_u", "super u" %>
-                    <p class="font-semibold text-slate-900">🌿 Super U</p>
+                    <p class="font-semibold text-[#1b1c1c]">🌿 Super U</p>
                 <% end %>
-                <p class="mt-1 text-xs text-slate-500">Comparer les prix</p>
+                <p class="mt-1 text-xs text-[#72796e]">Comparer les prix</p>
               </div>
             </label>
           <% end %>
@@ -57,17 +57,17 @@
           <label class="group relative cursor-pointer">
             <input type="radio" name="cart[strategy]" value="cheapest" class="sr-only peer" checked 
                    aria-label="Moins cher">
-            <div class="rounded-lg border-2 border-slate-200 bg-white px-4 py-3 transition-all peer-checked:border-indigo-600 peer-checked:bg-indigo-50 hover:border-slate-300">
-              <p class="font-semibold text-slate-900">💰 Moins cher</p>
-              <p class="mt-1 text-xs text-slate-500">Prix total minimal</p>
+            <div class="rounded-lg border-2 border-[#c2c9bb] bg-white px-4 py-3 transition-all peer-checked:border-[#2d5a27] peer-checked:bg-[#ecf9e8] hover:border-[#a1d494]">
+              <p class="font-semibold text-[#1b1c1c]">💰 Moins cher</p>
+              <p class="mt-1 text-xs text-[#72796e]">Prix total minimal</p>
             </div>
           </label>
           <label class="group relative cursor-pointer">
             <input type="radio" name="cart[strategy]" value="best_per_kg" class="sr-only peer"
                    aria-label="Meilleur prix/kg">
-            <div class="rounded-lg border-2 border-slate-200 bg-white px-4 py-3 transition-all peer-checked:border-indigo-600 peer-checked:bg-indigo-50 hover:border-slate-300">
-              <p class="font-semibold text-slate-900">⚖️ Meilleur €/kg</p>
-              <p class="mt-1 text-xs text-slate-500">Qualité vs prix</p>
+            <div class="rounded-lg border-2 border-[#c2c9bb] bg-white px-4 py-3 transition-all peer-checked:border-[#2d5a27] peer-checked:bg-[#ecf9e8] hover:border-[#a1d494]">
+              <p class="font-semibold text-[#1b1c1c]">⚖️ Meilleur €/kg</p>
+              <p class="mt-1 text-xs text-[#72796e]">Qualité vs prix</p>
             </div>
           </label>
         </div>
@@ -79,7 +79,7 @@
           <label for="cart_items_text" class="label label-required">
             Votre liste de courses
           </label>
-          <span class="text-xs text-slate-500">
+          <span class="text-xs text-[#72796e]">
             <span id="item-count">0</span> articles
           </span>
         </div>
@@ -89,7 +89,7 @@
                   class="input textarea resize-none font-mono text-sm"
                   required aria-label="Liste de courses" 
                   data-controller="list-counter"></textarea>
-        <p class="text-xs text-slate-500">
+        <p class="text-xs text-[#72796e]">
           💡 Copiez-collez votre liste d'un appel précédent ou saisissez manuellement.
         </p>
       </div>
@@ -100,7 +100,7 @@
         Comparer mes prix
       </button>
 
-      <p class="text-center text-xs text-slate-500">
+      <p class="text-center text-xs text-[#72796e]">
         Temps estimé : <strong>2-3 minutes</strong> • Résultats en direct
       </p>
     </div>
@@ -108,20 +108,20 @@
 
   <%# ── Info cards ── %>
   <div class="mx-auto max-w-2xl px-4 grid gap-4 sm:grid-cols-3 sm:px-6">
-    <div class="rounded-xl border border-slate-200 bg-white p-4 text-center">
+    <div class="rounded-xl border border-[#c2c9bb] bg-white p-4 text-center">
       <p class="text-2xl">⚡</p>
-      <p class="mt-2 text-sm font-semibold text-slate-900">Ultra rapide</p>
-      <p class="mt-1 text-xs text-slate-600">Résultats en 2-3 minutes</p>
+      <p class="mt-2 text-sm font-semibold text-[#1b1c1c]">Ultra rapide</p>
+      <p class="mt-1 text-xs text-[#42493e]">Résultats en 2-3 minutes</p>
     </div>
-    <div class="rounded-xl border border-slate-200 bg-white p-4 text-center">
+    <div class="rounded-xl border border-[#c2c9bb] bg-white p-4 text-center">
       <p class="text-2xl">🏪</p>
-      <p class="mt-2 text-sm font-semibold text-slate-900">Multi-enseignes</p>
-      <p class="mt-1 text-xs text-slate-600">Leclerc, Carrefour, etc.</p>
+      <p class="mt-2 text-sm font-semibold text-[#1b1c1c]">Multi-enseignes</p>
+      <p class="mt-1 text-xs text-[#42493e]">Leclerc, Carrefour, etc.</p>
     </div>
-    <div class="rounded-xl border border-slate-200 bg-white p-4 text-center">
+    <div class="rounded-xl border border-[#c2c9bb] bg-white p-4 text-center">
       <p class="text-2xl">💵</p>
-      <p class="mt-2 text-sm font-semibold text-slate-900">Économisez</p>
-      <p class="mt-1 text-xs text-slate-600">Jusqu'à 30% d'économies</p>
+      <p class="mt-2 text-sm font-semibold text-[#1b1c1c]">Économisez</p>
+      <p class="mt-1 text-xs text-[#42493e]">Jusqu'à 30% d'économies</p>
     </div>
   </div>
 </div>

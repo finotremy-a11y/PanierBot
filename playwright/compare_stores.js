@@ -104,6 +104,7 @@ try {
     mode: "multi_store",
     strategy,
     city,
+    unavailable_stores: Array.isArray(result?.unavailableStores) ? result.unavailableStores : [],
     items: itemResults.map((entry) => ({
       query: entry.item,
       winner_store: entry.winnerStore || null,

@@ -7,7 +7,7 @@
 <% if price.present? && price.to_f > 0 %>
   <% formatted = number_to_currency(price.to_f, unit: "€", separator: ",", delimiter: " ", precision: 2, format: "%n %u") rescue "#{price} €" %>
   <% if prominent %>
-    <span class="inline-block rounded-lg bg-indigo-600 px-3 py-1 text-lg font-extrabold text-white shadow-sm shadow-indigo-200">
+    <span class="inline-block rounded-lg bg-[#2d5a27] px-3 py-1 text-lg font-extrabold tracking-[0.02em] text-white shadow-sm shadow-[#a1d494]/50">
       <%= formatted %>
     </span>
   <% else %>

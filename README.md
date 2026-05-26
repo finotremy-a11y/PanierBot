@@ -100,6 +100,73 @@ npm run build-cart -- --store leclerc --items '["pates","lait"]' --strategy best
 
 Résultat attendu: JSON avec success/errors/details et logs de l'agent.
 
+## Verification de readiness
+
+Pour un contrôle de livraison plus strict, lancer:
+
+```bash
+bash script/production_setup_check.sh
+```
+
+Ce script exécute les tests Rails, les scans de sécurité, le lint, une couverture statique des sélecteurs ajoutés pour les marqueurs/boutons automatiques, puis les audits Playwright si un endpoint CDP est disponible.
+
+Par défaut, la readiness vérifie aussi la présence des secrets de billing en mode strict:
+
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PREMIUM_PRICE_ID`
+
+Pour un run local sans billing, désactiver ce verrou:
+
+```bash
+STRICT_BILLING_SECRETS=0 bash script/production_setup_check.sh
+```
+
+Pour sauter les audits navigateur dans un environnement sans Chrome/CDP:
+
+```bash
+SKIP_BROWSER_AUDITS=1 bash script/production_setup_check.sh
+```
+
+Pour réutiliser la session navigateur validée manuellement (captcha déjà résolu):
+
+```bash
+PRESERVE_CDP_SESSION=1 bash script/production_setup_check.sh
+```
+
+## Résilience anti-blocage (prod)
+
+Le projet applique désormais une stratégie de continuité:
+
+- file d'attente stricte côté Rails pour les comparaisons,
+- limitation de débit renforcée (middleware + contrôleurs),
+- cache de résultats (items/stratégie/mode/ville) pour éviter de relancer les mêmes parcours navigateur,
+- marquage temporaire d'enseigne indisponible avec poursuite sur les autres enseignes,
+- alertes de session/captcha dans des logs dédiés.
+
+### Validation manuelle de session opérateur
+
+Quand une enseigne présente un captcha, valider la session dans Chrome puis enregistrer l'état:
+
+```bash
+cd playwright
+npm run validate-session -- --store intermarche
+```
+
+Fichier écrit: `playwright/logs/session_validation.json`
+
+### Logs de disponibilité/alertes
+
+- `playwright/logs/store_availability.json` : enseignes temporairement indisponibles (TTL auto)
+- `playwright/logs/session_alerts.jsonl` : alertes d'expiration session et blocages anti-bot
+
+## Etat d'authentification navigateur (secrets locaux)
+
+Les fichiers d'état navigateur `auth.json` (racine) et `playwright/auth.json` sont locaux et ignorés par Git.
+
+- Utiliser des copies locales non versionnées.
+- Ne jamais committer de cookies/session réels.
+
 ### 2. Test Rails service (Rails -> Node avec orchestration agent)
 
 ```bash

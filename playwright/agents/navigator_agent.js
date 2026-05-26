@@ -1201,6 +1201,68 @@ function hasStrategyMetric(product, strategy) {
   }
 }
 
+const QUERY_STOPWORDS = new Set([
+  "de",
+  "du",
+  "des",
+  "la",
+  "le",
+  "les",
+  "un",
+  "une",
+  "et",
+  "au",
+  "aux",
+  "a",
+  "d",
+  "l",
+  "pour"
+]);
+
+function normalizeQueryText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getQueryTokens(query) {
+  return normalizeQueryText(query)
+    .split(" ")
+    .filter((token) => token.length >= 3)
+    .filter((token) => !QUERY_STOPWORDS.has(token));
+}
+
+function productMatchesQuery(product, query) {
+  const tokens = getQueryTokens(query);
+  if (tokens.length === 0) {
+    return true;
+  }
+
+  const haystack = normalizeQueryText([
+    product?.name,
+    product?.title,
+    product?.label,
+    product?.brand,
+    product?.quantity,
+    product?.category
+  ].filter(Boolean).join(" "));
+
+  if (!haystack) {
+    return false;
+  }
+
+  const hits = tokens.filter((token) => haystack.includes(token)).length;
+  if (tokens.length === 1) {
+    return hits === 1;
+  }
+
+  return hits >= Math.ceil(tokens.length / 2);
+}
+
 function createProductComparator(strategy) {
   const safeStrategy = normalizeStrategy(strategy);
 
@@ -1219,6 +1281,7 @@ function createProductComparator(strategy) {
 
 function filterProducts(products, strategy = "cheapest", options = {}) {
   const storeName = options.storeName ? String(options.storeName) : null;
+  const requestedQuery = String(options.query || options.item || options.targetQuery || "").trim();
   const normalized = Array.isArray(products)
     ? products
       .map((product, index) => normalizeProduct(product, { index, store: product?.store || storeName || options.store || "unknown" }))
@@ -1234,6 +1297,10 @@ function filterProducts(products, strategy = "cheapest", options = {}) {
       return false;
     }
 
+    if (requestedQuery && !productMatchesQuery(product, requestedQuery)) {
+      return false;
+    }
+
     if (normalizeStrategy(strategy) === "per_unit") {
       return String(product.quantity || "").trim().length > 0;
     }
@@ -1243,7 +1310,7 @@ function filterProducts(products, strategy = "cheapest", options = {}) {
 
   recordComparatorLog(
     options.logs,
-    `🔎 Filtrage produits${storeName ? ` (${storeName})` : ""} (${normalized.length} → ${filtered.length} restants)`
+    `🔎 Filtrage produits${storeName ? ` (${storeName})` : ""}${requestedQuery ? ` [query=${requestedQuery}]` : ""} (${normalized.length} → ${filtered.length} restants)`
   );
 
   return filtered;
@@ -1373,7 +1440,7 @@ async function buildFinalCart(items = [], strategy = "cheapest", mode = "multi_s
         const productLists = await gatherProductsForItem(item);
 
         for (const store of storeOrder) {
-          const filtered = filterProducts(productLists[store], safeStrategy, { logs, storeName: store });
+          const filtered = filterProducts(productLists[store], safeStrategy, { logs, storeName: store, query: item });
           const sorted = sortProductsByStrategy(filtered, safeStrategy, { logs, storeName: store });
           const bestProduct = sorted[0] || null;
 
@@ -1439,7 +1506,7 @@ async function buildFinalCart(items = [], strategy = "cheapest", mode = "multi_s
 
     for (const item of queries) {
       const productLists = await gatherProductsForItem(item);
-      const comparison = compareProductsAcrossStores(productLists, safeStrategy, { logs, storeOrder });
+      const comparison = compareProductsAcrossStores(productLists, safeStrategy, { logs, storeOrder, query: item });
       const winner = comparison.bestProduct;
 
       if (!winner) {
@@ -2353,6 +2420,11 @@ const LECLERC_ARROW_SELECTORS = [
   "section[class*='iel-flex-row'] > :last-child div[class*='iel-cursor-pointer'][class*='iel-flex-col']",
   // ── 'Faire vos courses' link present in store list ──────────────────────────
   "a:has-text('Faire vos courses')",
+  "button:has-text('Lancer la recherche')",
+  "a:has-text('Lancer la recherche')",
+  "button:has-text('Choisissez votre magasin')",
+  "a:has-text('Choisissez votre magasin')",
+  "button:has-text('Me géolocaliser')",
   // ── New iel-* React component (leclercdrive.fr 2024+) ───────────────────────
   // "Choisir ce Drive" button directly in the store list panel
   "button:has-text('Choisir ce Drive')",
@@ -2608,8 +2680,16 @@ const INTERMARCHE_POPUP_SELECTORS = [
 const INTERMARCHE_STORE_SEARCH_SELECTORS = [
   "input[name='search']",
   "input[name='city']",
+  "input[name*='city' i]",
+  "input[name*='postal' i]",
+  "input[id*='city' i]",
+  "input[id*='postal' i]",
+  "input[id*='store' i]",
+  "input[id*='address' i]",
   "input[placeholder*='adresse' i]",
+  "input[placeholder*='commune' i]",
   "input[aria-label*='adresse' i]",
+  "input[aria-label*='commune' i]",
   "input[placeholder*='75001' i]",
   "input[aria-label*='75001' i]",
   "input[data-testid*='store-search' i]",
@@ -2981,6 +3061,11 @@ async function selectLeclercDriveArrow(page, options = {}) {
 
   // Step 0: try to expose the store list if a pre-selector button is present.
   await dismissBlockingOverlays(page, [
+    "button:has-text('Tout accepter')",
+    "button:has-text('Continuer sans accepter')",
+    "button:has-text('Paramétrer les cookies')"
+  ]).catch(() => {});
+  await dismissBlockingOverlays(page, [
     "button:has-text('Choisir mon magasin')",
     "button:has-text('Choisir votre magasin')"
   ]).catch(() => {});
@@ -3010,7 +3095,7 @@ async function selectLeclercDriveArrow(page, options = {}) {
 
   // If a visible store search field is present, seed it with the requested city.
   try {
-    const storeInput = page.locator("#wpad-recherche-magasin-input, input[placeholder*='récupérer vos courses' i], input[placeholder*='code postal' i], input[placeholder*='ville' i]").first();
+    const storeInput = page.locator("#wpad-recherche-magasin-input, input[type='search'], input[placeholder*='récupérer vos courses' i], input[placeholder*='code postal' i], input[placeholder*='ville' i], input[aria-label*='récupérer vos courses' i], input[aria-label*='saisir ville' i], input[aria-label*='code postal' i]").first();
     if (await storeInput.count() > 0 && await storeInput.isVisible({ timeout: 250 })) {
       await storeInput.click({ timeout: 1500 }).catch(() => {});
       await storeInput.fill("").catch(() => {});
@@ -3066,15 +3151,40 @@ async function selectLeclercDriveArrow(page, options = {}) {
       return hasStoreText || (hasCatalogSignals && hasVisibleProductCard);
     }).catch(() => false);
 
+    const modernPortalVisible = await page.evaluate(() => {
+      const isVisible = (node) => {
+        const rect = node.getBoundingClientRect();
+        const style = window.getComputedStyle(node);
+        return rect.width > 2 && rect.height > 2 && style.visibility !== "hidden" && style.display !== "none";
+      };
+
+      const visibleFaireVosCourses = Array.from(document.querySelectorAll("a, button, [role='button']")).some((node) => {
+        const text = String(node.textContent || node.getAttribute("aria-label") || "").toLowerCase().replace(/\s+/g, " ").trim();
+        return isVisible(node) && text.includes("faire vos courses");
+      });
+
+      const visibleStoreCards = Array.from(document.querySelectorAll("[class*='iel-cursor-pointer'], [class*='store' i], [class*='drive' i], a, button")).some((node) => {
+        const text = String(node.textContent || node.getAttribute("aria-label") || "").toLowerCase().replace(/\s+/g, " ").trim();
+        return isVisible(node) && (text.includes("drive") || text.includes("retrait piéton") || text.includes("livraison à domicile"));
+      });
+
+      return visibleFaireVosCourses || visibleStoreCards;
+    }).catch(() => false);
+
     if (alreadySelected) {
       logger.push("selectLeclercDriveArrow:store_already_selected");
       console.log("✅ Magasin déjà sélectionné, étape selectStore validée");
       return { success: true, selector: "__already_selected__", error: null };
     }
 
-    const msg = `Aucun sélecteur de flèche trouvé après ${storeListTimeout}ms : ${err.message}`;
-    logger.push(`selectLeclercDriveArrow:store_list_timeout ${msg}`);
-    return { success: false, selector: null, error: msg };
+    if (modernPortalVisible) {
+      logger.push("selectLeclercDriveArrow:modern_portal_visible");
+      console.log("✅ Portail Leclerc moderne détecté, poursuite de la sélection");
+    } else {
+      const msg = `Aucun sélecteur de flèche trouvé après ${storeListTimeout}ms : ${err.message}`;
+      logger.push(`selectLeclercDriveArrow:store_list_timeout ${msg}`);
+      logger.push("selectLeclercDriveArrow:store_list_timeout_continuing");
+    }
   }
 
   // ── Step 2 : identify the best matching target in priority order ────────────
@@ -3118,15 +3228,9 @@ async function selectLeclercDriveArrow(page, options = {}) {
   }
 
   if (!resolvedSelector) {
-    if (strictMode) {
-      const msg = `Aucune flèche de magasin détectée dans le DOM (${combinedListSelector})`;
-      logger.push("selectLeclercDriveArrow:no_arrow_found");
-      return { success: false, selector: null, error: msg };
-    }
-
     try {
       const domCandidate = await page.evaluate(() => {
-        const texts = ["choisir ce drive", "choisir", "continuer", "mon magasin", "drive"];
+        const texts = ["faire vos courses", "lancer la recherche", "choisissez votre magasin", "me géolocaliser", "choisir ce drive", "choisir", "continuer", "mon magasin", "drive"];
         const candidates = Array.from(document.querySelectorAll("button, a, [role='button']"));
         const isVisible = (node) => {
           const style = window.getComputedStyle(node);
@@ -3136,7 +3240,23 @@ async function selectLeclercDriveArrow(page, options = {}) {
 
         const match = candidates.find((node) => {
           const text = (node.textContent || "").toLowerCase().replace(/\s+/g, " ").trim();
-          return isVisible(node) && texts.some((needle) => text.includes(needle));
+          if (!isVisible(node)) {
+            return false;
+          }
+
+          if (text.includes("faire vos courses")) {
+            return true;
+          }
+
+          if (text.includes("lancer la recherche") || text.includes("choisissez votre magasin") || text.includes("me géolocaliser")) {
+            return true;
+          }
+
+          if (text.includes("choisir ce drive") || text === "drive" || text.includes("drive")) {
+            return false;
+          }
+
+          return texts.some((needle) => text.includes(needle));
         });
 
         if (!match) {
@@ -3159,6 +3279,12 @@ async function selectLeclercDriveArrow(page, options = {}) {
     } catch (_) {
       // keep failure below
     }
+
+    if (!resolvedSelector && strictMode) {
+      const msg = `Aucune flèche de magasin détectée dans le DOM (${combinedListSelector})`;
+      logger.push("selectLeclercDriveArrow:no_arrow_found");
+      return { success: false, selector: null, error: msg };
+    }
   }
 
   if (!resolvedSelector) {
@@ -3178,7 +3304,7 @@ async function selectLeclercDriveArrow(page, options = {}) {
       await card.click({ timeout: 5000 });
     } else if (clickMode === "dom-text") {
       await page.evaluate(() => {
-        const texts = ["choisir ce drive", "choisir", "continuer", "mon magasin", "drive"];
+          const texts = ["faire vos courses", "choisir ce drive", "choisir", "continuer", "mon magasin", "drive", "lancer la recherche", "choisissez votre magasin", "me géolocaliser"];
         const candidates = Array.from(document.querySelectorAll("button, a, [role='button']"));
         const isVisible = (node) => {
           const style = window.getComputedStyle(node);
@@ -3239,7 +3365,7 @@ async function selectLeclercDriveArrow(page, options = {}) {
         }, idx);
       } else if (clickMode === "dom-text") {
         await page.evaluate(() => {
-          const texts = ["choisir ce drive", "choisir", "continuer", "mon magasin", "drive"];
+          const texts = ["choisir ce drive", "choisir", "continuer", "mon magasin", "drive", "lancer la recherche", "choisissez votre magasin", "me géolocaliser"];
           const candidates = Array.from(document.querySelectorAll("button, a, [role='button']"));
           const target = candidates.find((node) => {
             const text = (node.textContent || "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -3384,8 +3510,37 @@ async function waitAnySelector(page, selectors, timeout = 12000) {
   while (Date.now() < deadline) {
     for (const sel of selectors) {
       try {
-        const loc = page.locator(sel).first();
-        if (await loc.count() > 0 && await loc.isVisible({ timeout: 250 })) {
+        const visible = await page.evaluate((selector) => {
+          const isVisible = (node) => {
+            if (!(node instanceof Element)) {
+              return false;
+            }
+            const rect = node.getBoundingClientRect();
+            const style = window.getComputedStyle(node);
+            return rect.width > 2 && rect.height > 2 && style.visibility !== "hidden" && style.display !== "none";
+          };
+
+          const parseHasText = (selectorText) => {
+            const match = String(selectorText).match(/:has-text\('([^']+)'\)/);
+            return match ? match[1].toLowerCase() : null;
+          };
+
+          const textNeedle = parseHasText(selector);
+          const baseSelector = String(selector).replace(/:has-text\('[^']+'\)/g, "");
+          const nodes = Array.from(document.querySelectorAll(baseSelector)).slice(0, 20);
+          return nodes.some((node) => {
+            if (!isVisible(node)) {
+              return false;
+            }
+            if (!textNeedle) {
+              return true;
+            }
+            const text = String(node.textContent || node.getAttribute("aria-label") || "").toLowerCase().replace(/\s+/g, " ").trim();
+            return text.includes(textNeedle);
+          });
+        }, sel).catch(() => false);
+
+        if (visible) {
           return sel;
         }
       } catch (_) {
@@ -4414,8 +4569,10 @@ async function searchProduct(page, query, options = {}) {
     await targetInput.type(safeQuery, { delay: 40 });
 
     const submitSelector = await waitAnySelector(page, LECLERC_PRODUCT_SUBMIT_SELECTORS, 2000);
+    let submittedViaKeyboard = false;
     try {
       await page.keyboard.press("Enter");
+      submittedViaKeyboard = true;
     } catch (err) {
       if (strictMode) {
         return {
@@ -4430,20 +4587,26 @@ async function searchProduct(page, query, options = {}) {
       // fall through to explicit submit handling below
     }
 
-    if (submitSelector) {
+    if (submittedViaKeyboard) {
+      await page.waitForTimeout(700).catch(() => {});
+      const keyboardSubmissionConfirmed = await page.evaluate(() => {
+        const url = String(window.location.href || "").toLowerCase();
+        const body = String(document.body?.innerText || "").toLowerCase();
+        const hasSearchUrl = /recherche|s\//i.test(url);
+        const hasSearchSignals = /résultat|resultat|produit|ajouter au panier|aucun résultat|aucun resultat/i.test(body);
+        return hasSearchUrl || hasSearchSignals;
+      }).catch(() => false);
+
+      if (keyboardSubmissionConfirmed) {
+        logger.push(`searchProduct:submitted_keyboard query=${safeQuery}`);
+      }
+    }
+
+    if (submitSelector && !submittedViaKeyboard) {
       try {
         await page.click(submitSelector, { timeout: 3000, force: true });
       } catch (err) {
-        if (strictMode) {
-          return {
-            success: false,
-            query: safeQuery,
-            selector: inputSelector,
-            products: [],
-            error: `Soumission de recherche échouée: ${err.message}`
-          };
-        }
-
+        logger.push(`searchProduct:submit_click_timeout fallback_form_submit reason=${err.message}`);
         await targetInput.evaluate((element) => {
           const form = element?.closest?.("form");
           if (form && typeof form.requestSubmit === "function") {
@@ -4805,23 +4968,36 @@ async function selectCarrefourStore(page, city, options = {}) {
       };
     }
 
-    const opened = await safeClick(page, [
-      "button:has-text('Commencer mes courses')",
-      "a:has-text('Commencer mes courses')",
-      "button:has-text('Trouver un magasin')",
-      "a:has-text('Trouver un magasin')"
-    ], "entrée choix magasin Carrefour");
+    const directInputReady = await waitAnySelector(page, CARREFOUR_STORE_SEARCH_SELECTORS, 1800);
+    if (directInputReady) {
+      logger.push("selectCarrefourStore:store_input_already_visible");
+    } else {
+      const opened = await safeClick(page, [
+        "button:has-text('Changer de drive')",
+        "a:has-text('Changer de drive')",
+        "button:has-text('Choisir mon magasin')",
+        "a:has-text('Choisir mon magasin')",
+        "button:has-text('Choisir votre magasin')",
+        "a:has-text('Choisir votre magasin')",
+        "button:has-text('Sélectionner un magasin')",
+        "a:has-text('Sélectionner un magasin')",
+        "button:has-text('Commencer mes courses')",
+        "a:has-text('Commencer mes courses')",
+        "button:has-text('Trouver un magasin')",
+        "a:has-text('Trouver un magasin')"
+      ], "entrée choix magasin Carrefour");
 
-    if (!opened) {
-      return {
-        success: false,
-        city: safeCity,
-        storeName: null,
-        error: "Ouverture de la modale magasin Carrefour impossible"
-      };
+      if (!opened) {
+        return {
+          success: false,
+          city: safeCity,
+          storeName: null,
+          error: "Ouverture de la modale magasin Carrefour impossible"
+        };
+      }
+
+      await page.waitForTimeout(1200);
     }
-
-    await page.waitForTimeout(1200);
   }
 
   await safeClick(page, [
@@ -5111,6 +5287,35 @@ async function searchCarrefourProduct(page, query, options = {}) {
     }
   }
 
+  await dismissBlockingOverlays(page, [
+    "#onetrust-accept-btn-handler",
+    "#onetrust-reject-all-handler",
+    "button[id*='onetrust-accept' i]",
+    "button[id*='accept' i]",
+    "button:has-text('Tout accepter')",
+    "button:has-text('Accepter')",
+    "button:has-text('Continuer sans accepter')"
+  ]).catch(() => {});
+
+  await page.evaluate(() => {
+    const root = document.querySelector("#onetrust-consent-sdk");
+    if (!root) return;
+
+    const button = root.querySelector("#onetrust-accept-btn-handler, #onetrust-reject-all-handler, button[id*='accept' i], button[id*='reject' i]");
+    if (button && typeof button.click === "function") {
+      button.click();
+    }
+
+    const style = window.getComputedStyle(root);
+    const isVisible = style.display !== "none" && style.visibility !== "hidden";
+    if (isVisible) {
+      root.setAttribute("data-monitor-hidden", "true");
+      root.style.display = "none";
+      root.style.visibility = "hidden";
+      root.style.pointerEvents = "none";
+    }
+  }).catch(() => {});
+
   const inputSelectors = uniqueTexts([
     ...extraSearchSelectors,
     ...CARREFOUR_SEARCH_INPUT_SELECTORS
@@ -5150,7 +5355,33 @@ async function searchCarrefourProduct(page, query, options = {}) {
       };
     }
 
-    await targetInput.click({ timeout: 5000 });
+    try {
+      await targetInput.click({ timeout: 5000 });
+    } catch (clickError) {
+      await dismissBlockingOverlays(page, [
+        "#onetrust-accept-btn-handler",
+        "#onetrust-reject-all-handler",
+        "button[id*='accept' i]",
+        "button:has-text('Tout accepter')",
+        "button:has-text('Accepter')",
+        "button:has-text('Continuer sans accepter')"
+      ]).catch(() => {});
+
+      await targetInput.click({ timeout: 3000, force: true }).catch(async () => {
+        const handle = await targetInput.elementHandle();
+        if (handle) {
+          await handle.evaluate((node) => {
+            if (node instanceof HTMLElement) {
+              node.focus();
+              node.click();
+            }
+          });
+        }
+      });
+
+      logger.push(`searchCarrefourProduct:click_retry reason=${clickError.message}`);
+    }
+
     await targetInput.fill("");
     await targetInput.type(safeQuery, { delay: 35 });
 
@@ -5664,6 +5895,35 @@ async function snapshotIntermarcheCartCount(page, extraSignals = []) {
   }
 }
 
+async function detectIntermarcheAntiBotInterstitial(page) {
+  return page.evaluate(() => {
+    const lower = (value) => String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
+    const bodyText = lower(document.body?.innerText || "");
+    const htmlText = lower(document.documentElement?.innerText || "");
+    const title = lower(document.title || "");
+    const url = lower(window.location.href || "");
+
+    const iframeSrc = Array.from(document.querySelectorAll("iframe"))
+      .map((frame) => lower(frame.src || ""))
+      .find((src) => src.includes("captcha-delivery.com") || src.includes("hcaptcha") || src.includes("recaptcha") || src.includes("datadome")) || null;
+
+    const blockedByText = /captcha|challenge|just a moment|please enable js|access denied|forbidden/.test(bodyText)
+      || /captcha|challenge|just a moment|please enable js/.test(htmlText)
+      || /captcha|challenge|just a moment/.test(title);
+
+    const blockedByDomVoid = bodyText.length === 0 && Boolean(iframeSrc);
+    const blocked = Boolean(iframeSrc || blockedByText || blockedByDomVoid || url.includes("geo.captcha-delivery.com"));
+
+    return {
+      blocked,
+      iframeSrc,
+      title,
+      url,
+      bodyLength: bodyText.length
+    };
+  }).catch(() => ({ blocked: false, iframeSrc: null, title: null, url: null, bodyLength: 0 }));
+}
+
 async function selectIntermarcheStore(page, city, options = {}) {
   const safeCity = String(city || "").trim();
   const timeout = Math.max(6000, Number(options.timeout) || 30000);
@@ -5688,6 +5948,17 @@ async function selectIntermarcheStore(page, city, options = {}) {
   if (!currentUrl.includes("intermarche.com")) {
     await page.goto(INTERMARCHE_DRIVE_URL, { waitUntil: "domcontentloaded", timeout });
     await page.waitForTimeout(1200);
+  }
+
+  const earlyInterstitial = await detectIntermarcheAntiBotInterstitial(page);
+  if (earlyInterstitial?.blocked) {
+    logger.push(`selectIntermarcheStore:interstitial_detected url=${earlyInterstitial.url || currentUrl} iframe=${earlyInterstitial.iframeSrc || 'none'}`);
+    return {
+      success: false,
+      city: safeCity,
+      storeName: null,
+      error: "Acces bloque par anti-bot/captcha Intermarche (verification JS requise)"
+    };
   }
 
   await dismissIntermarcheOverlays(page);
@@ -5873,12 +6144,103 @@ async function selectIntermarcheStore(page, city, options = {}) {
   }
 
   if (!storeInputSelector) {
+    const lateInterstitial = await detectIntermarcheAntiBotInterstitial(page);
+    if (lateInterstitial?.blocked) {
+      logger.push(`selectIntermarcheStore:interstitial_detected_late url=${lateInterstitial.url || ''} iframe=${lateInterstitial.iframeSrc || 'none'}`);
+      return {
+        success: false,
+        city: safeCity,
+        storeName: null,
+        error: "Acces bloque par anti-bot/captcha Intermarche (verification JS requise)"
+      };
+    }
+
+    const fallbackAlreadySelected = await page.evaluate((cityValue, searchSelectors) => {
+      const lower = (value) => String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
+      const body = lower(document.body?.innerText || "");
+      const city = lower(cityValue || "");
+      const url = lower(window.location.href || "");
+      const hasChooser = body.includes("choisir mon magasin") || body.includes("choisir votre magasin");
+
+      const isVisible = (node) => {
+        if (!(node instanceof HTMLElement)) return false;
+        const style = window.getComputedStyle(node);
+        if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity || "1") === 0) return false;
+        const rect = node.getBoundingClientRect();
+        return rect.width > 2 && rect.height > 2;
+      };
+
+      const hasSearchInput = (searchSelectors || []).some((selector) => {
+        try {
+          const nodes = Array.from(document.querySelectorAll(selector));
+          return nodes.some((node) => isVisible(node));
+        } catch (_) {
+          return false;
+        }
+      });
+
+      const hasCatalogUrl = url.includes("/recherche") || url.includes("courses-en-ligne") || url.includes("/drive") || url.includes("/accueil");
+      const hasCatalogSignals = body.includes("produits") || body.includes("rayons") || body.includes("promotions") || body.includes("ajouter au panier");
+      const hasCitySignal = city.length > 0 && body.includes(city);
+
+      return !hasChooser && hasSearchInput && (hasCatalogUrl || hasCatalogSignals || hasCitySignal);
+    }, safeCity, INTERMARCHE_SEARCH_INPUT_SELECTORS).catch(() => false);
+
+    if (fallbackAlreadySelected) {
+      console.log(`📦 Intermarché magasin déjà sélectionné (fallback): ${safeCity}`);
+      logger.push(`selectIntermarcheStore:already_selected_fallback store=${safeCity}`);
+      return {
+        success: true,
+        city: safeCity,
+        storeName: safeCity,
+        error: null
+      };
+    }
+
+    const missingInputDiagnostics = await page.evaluate((cityValue, searchSelectors) => {
+      const lower = (value) => String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
+      const body = lower(document.body?.innerText || "");
+      const city = lower(cityValue || "");
+      const url = lower(window.location.href || "");
+
+      const isVisible = (node) => {
+        if (!(node instanceof HTMLElement)) return false;
+        const style = window.getComputedStyle(node);
+        if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity || "1") === 0) return false;
+        const rect = node.getBoundingClientRect();
+        return rect.width > 2 && rect.height > 2;
+      };
+
+      const visibleSearchSelectors = (searchSelectors || []).filter((selector) => {
+        try {
+          const nodes = Array.from(document.querySelectorAll(selector));
+          return nodes.some((node) => isVisible(node));
+        } catch (_) {
+          return false;
+        }
+      }).slice(0, 5);
+
+      return {
+        url,
+        hasChooser: body.includes("choisir mon magasin") || body.includes("choisir votre magasin"),
+        hasCatalogSignals: body.includes("produits") || body.includes("rayons") || body.includes("promotions") || body.includes("ajouter au panier"),
+        hasCitySignal: city.length > 0 && body.includes(city),
+        visibleSearchSelectors,
+        bodyExcerpt: body.slice(0, 220)
+      };
+    }, safeCity, INTERMARCHE_SEARCH_INPUT_SELECTORS).catch(() => null);
+
     logger.push("selectIntermarcheStore:store_input_missing");
+    if (missingInputDiagnostics) {
+      logger.push(`selectIntermarcheStore:store_input_missing url=${missingInputDiagnostics.url} chooser=${missingInputDiagnostics.hasChooser} catalog=${missingInputDiagnostics.hasCatalogSignals} city=${missingInputDiagnostics.hasCitySignal} search=${missingInputDiagnostics.visibleSearchSelectors.join('|')}`);
+    }
     return {
       success: false,
       city: safeCity,
       storeName: null,
-      error: "Input de sélection magasin introuvable"
+      error: missingInputDiagnostics
+        ? `Input de sélection magasin introuvable (url=${missingInputDiagnostics.url} chooser=${missingInputDiagnostics.hasChooser} catalog=${missingInputDiagnostics.hasCatalogSignals} city=${missingInputDiagnostics.hasCitySignal} search=${missingInputDiagnostics.visibleSearchSelectors.join('|') || 'none'})`
+        : "Input de sélection magasin introuvable"
     };
   }
 

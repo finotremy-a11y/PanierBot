@@ -2,47 +2,47 @@
 <% content_for :title, "PanierBot — Comparez vos courses en drive" %>
 
 <%# ── Hero ── %>
-<section class="relative overflow-hidden bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 pb-32 pt-20 text-white">
+<section class="hero-noise hero-compact relative overflow-hidden bg-gradient-to-br from-[#2d5a27] via-[#23501e] to-[#154212] pb-16 pt-20 text-white sm:pb-20 sm:pt-20">
   <%# Decorative blobs %>
-  <div class="pointer-events-none absolute -top-24 right-0 h-96 w-96 rounded-full bg-white/5 blur-3xl"></div>
-  <div class="pointer-events-none absolute bottom-0 left-0 h-64 w-64 rounded-full bg-indigo-500/30 blur-3xl"></div>
+  <div class="animate-aurora pointer-events-none absolute -top-24 right-0 h-96 w-96 rounded-full bg-white/5 blur-3xl"></div>
+  <div class="animate-aurora animate-delay-1 pointer-events-none absolute bottom-0 left-0 h-64 w-64 rounded-full bg-[#a1d494]/30 blur-3xl"></div>
 
   <div class="relative mx-auto max-w-3xl px-4 text-center sm:px-6">
-    <span class="mb-4 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-indigo-100 ring-1 ring-white/20">
+    <span class="animate-fade-in mb-4 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-[#ecf9e8] ring-1 ring-white/20">
       ✨ Gratuit · Instantané · Précis
     </span>
-    <h1 class="mt-4 text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
+    <h1 class="animate-slide-up mt-4 text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
       Trouvez le meilleur prix<br>pour vos courses en drive
     </h1>
-    <p class="mt-5 text-lg text-indigo-200 sm:text-xl">
+    <p class="animate-slide-up animate-delay-1 mt-5 text-lg text-[#d9e6da] sm:text-xl">
       Comparez Leclerc, Carrefour, Intermarché et Super U en quelques secondes.
       PanierBot analyse les prix pour vous et construit votre panier optimal.
     </p>
 
     <%# Stats badges %>
     <div class="mt-8 flex flex-wrap justify-center gap-4">
-      <div class="flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm font-medium ring-1 ring-white/20">
+      <div class="animate-scale-in animate-delay-1 flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm font-medium ring-1 ring-white/20">
         🏪 4 enseignes comparées
       </div>
-      <div class="flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm font-medium ring-1 ring-white/20">
+      <div class="animate-scale-in animate-delay-2 flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm font-medium ring-1 ring-white/20">
         ⚡ Résultat en temps réel
       </div>
-      <div class="flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm font-medium ring-1 ring-white/20">
+      <div class="animate-scale-in animate-delay-3 flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm font-medium ring-1 ring-white/20">
         🛒 Panier optimal calculé
       </div>
     </div>
   </div>
 </section>
 
-<%# ── Main form card (overlapping hero) ── %>
-<section class="-mt-20 px-4 pb-16 sm:px-6">
+<%# ── Main form card ── %>
+<section class="mt-8 px-4 pb-16 sm:mt-10 sm:px-6">
   <div class="mx-auto max-w-2xl">
-    <div class="rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60"
+    <div class="card-mobile-tight premium-outline surface-soft rounded-2xl border border-[#c2c9bb] bg-white shadow-[0_12px_30px_rgba(0,0,0,0.08)]"
          data-controller="compare mode strategy">
 
       <div class="p-6 sm:p-8">
-        <h2 class="text-xl font-bold text-slate-900">Votre liste de courses</h2>
-        <p class="mt-1 text-sm text-slate-500">Un produit par ligne. Ex: pâtes, lait demi-écrémé, bananes.</p>
+        <h2 class="text-xl font-bold text-[#1b1c1c]">Votre liste de courses</h2>
+        <p class="mt-1 text-sm text-[#42493e]">Un produit par ligne. Ex: pâtes, lait demi-écrémé, bananes.</p>
 
         <%= form_with url: compare_path, scope: :comparison, method: :post,
             data: { controller: "compare", action: "submit->compare#submit",
@@ -52,23 +52,23 @@
           <%# ── Shopping list input ── %>
           <div data-controller="list">
             <div class="flex items-center justify-between mb-3">
-              <label class="text-sm font-medium text-slate-700">Produits</label>
-              <button type="button"
+              <label class="text-sm font-medium text-[#42493e]">Produits</label>
+                    <button type="button"
                       data-action="click->list#addItem"
-                      class="inline-flex items-center gap-1 rounded-lg border border-dashed border-indigo-300 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-100 transition-colors">
+                      class="inline-flex items-center gap-1 rounded-lg border border-dashed border-[#a1d494] bg-[#ecf9e8] px-3 py-1 text-xs font-semibold text-[#2d5a27] transition-colors hover:bg-[#d9e6da] hover:shadow-sm">
                 + Ajouter un produit
               </button>
             </div>
 
             <div id="items-list" class="space-y-2" data-list-target="container">
               <div class="flex items-center gap-2" data-list-target="item">
-                  <span data-badge class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-600">1</span>
+                  <span data-badge class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#ecf9e8] text-xs font-bold text-[#2d5a27]">1</span>
                 <input type="text" name="comparison[items_text][]"
                        placeholder="Ex: pâtes 500g"
-                       class="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/20 transition"
+                       class="min-w-0 flex-1 rounded-lg border border-[#c2c9bb] bg-white px-3 py-2 text-sm text-[#1b1c1c] placeholder-[#72796e] shadow-sm focus:border-[#2d5a27] focus:outline-none focus:ring-2 focus:ring-[#a1d494]/40 transition"
                     data-list-target="input" data-action="input->list#inputChanged" autofocus>
                 <button type="button" data-action="click->list#removeItem"
-                        class="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                        class="flex h-7 w-7 items-center justify-center rounded-lg text-[#72796e] hover:bg-[#ffdad6] hover:text-[#ba1a1a] transition-colors"
                         aria-label="Supprimer">
                   <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
@@ -83,50 +83,50 @@
 
           <%# ── City ── %>
           <div>
-            <%= f.label :city, "Ville (pour la sélection du drive)", class: "mb-1.5 block text-sm font-medium text-slate-700" %>
+            <%= f.label :city, "Ville (pour la sélection du drive)", class: "mb-1.5 block text-sm font-medium text-[#42493e]" %>
             <%= f.text_field :city, value: "Paris", placeholder: "Paris",
-                class: "block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/20 transition" %>
+                class: "block w-full rounded-lg border border-[#c2c9bb] bg-white px-3 py-2 text-sm text-[#1b1c1c] shadow-sm focus:border-[#2d5a27] focus:outline-none focus:ring-2 focus:ring-[#a1d494]/40 transition" %>
           </div>
 
           <%# ── Mode selector ── %>
           <div data-mode-target="root">
-            <p class="mb-3 text-sm font-medium text-slate-700">Mode de comparaison</p>
+            <p class="mb-3 text-sm font-medium text-[#42493e]">Mode de comparaison</p>
             <div class="grid grid-cols-2 gap-3">
-              <label class="mode-option relative flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:border-indigo-300 hover:bg-indigo-50/50 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50 has-[:checked]:ring-1 has-[:checked]:ring-indigo-500">
+              <label class="mode-option relative flex cursor-pointer items-start gap-3 rounded-xl border border-[#c2c9bb] bg-[#f6f3f2] p-4 transition hover:border-[#a1d494] hover:bg-[#ecf9e8]/70 has-[:checked]:border-[#2d5a27] has-[:checked]:bg-[#ecf9e8] has-[:checked]:ring-1 has-[:checked]:ring-[#2d5a27]">
                 <%= f.radio_button :mode, "multi_store", checked: true,
-                    class: "mt-0.5 h-4 w-4 text-indigo-600 focus:ring-indigo-500",
+                    class: "mt-0.5 h-4 w-4 text-[#2d5a27] focus:ring-[#2d5a27]",
                     data: { action: "change->mode#changed" } %>
                 <span>
-                  <span class="block text-sm font-semibold text-slate-900">Multi-enseignes</span>
-                  <span class="mt-0.5 block text-xs text-slate-500">Compare les 4 drives et construit le panier optimal</span>
+                  <span class="block text-sm font-semibold text-[#1b1c1c]">Multi-enseignes</span>
+                  <span class="mt-0.5 block text-xs text-[#72796e]">Compare les 4 drives et construit le panier optimal</span>
                 </span>
               </label>
 
-              <label class="mode-option relative flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:border-indigo-300 hover:bg-indigo-50/50 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50 has-[:checked]:ring-1 has-[:checked]:ring-indigo-500">
+              <label class="mode-option relative flex cursor-pointer items-start gap-3 rounded-xl border border-[#c2c9bb] bg-[#f6f3f2] p-4 transition hover:border-[#a1d494] hover:bg-[#ecf9e8]/70 has-[:checked]:border-[#2d5a27] has-[:checked]:bg-[#ecf9e8] has-[:checked]:ring-1 has-[:checked]:ring-[#2d5a27]">
                 <%= f.radio_button :mode, "single_store",
-                    class: "mt-0.5 h-4 w-4 text-indigo-600 focus:ring-indigo-500",
+                    class: "mt-0.5 h-4 w-4 text-[#2d5a27] focus:ring-[#2d5a27]",
                     data: { action: "change->mode#changed" } %>
                 <span>
-                  <span class="block text-sm font-semibold text-slate-900">Mono-enseigne</span>
-                  <span class="mt-0.5 block text-xs text-slate-500">Construit le panier dans une seule enseigne</span>
+                  <span class="block text-sm font-semibold text-[#1b1c1c]">Mono-enseigne</span>
+                  <span class="mt-0.5 block text-xs text-[#72796e]">Construit le panier dans une seule enseigne</span>
                 </span>
               </label>
             </div>
 
             <%# Store selector (shown only in single_store mode) %>
             <div id="store-selector" class="mt-3 hidden" data-mode-target="storeSelector">
-              <%= f.label :store, "Choisir l'enseigne", class: "mb-1.5 block text-sm font-medium text-slate-700" %>
+              <%= f.label :store, "Choisir l'enseigne", class: "mb-1.5 block text-sm font-medium text-[#42493e]" %>
               <%= f.select :store,
                   [["Leclerc Drive", "leclerc"], ["Carrefour Drive", "carrefour"],
                    ["Intermarché Drive", "intermarche"], ["Super U Drive", "superu"]],
                   {},
-                  class: "block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/20 transition" %>
+                  class: "block w-full rounded-lg border border-[#c2c9bb] bg-white px-3 py-2 text-sm text-[#1b1c1c] shadow-sm focus:border-[#2d5a27] focus:outline-none focus:ring-2 focus:ring-[#a1d494]/40 transition" %>
             </div>
           </div>
 
           <%# ── Strategy selector ── %>
           <div>
-            <p class="mb-3 text-sm font-medium text-slate-700">Stratégie de sélection</p>
+            <p class="mb-3 text-sm font-medium text-[#42493e]">Stratégie de sélection</p>
             <div class="grid grid-cols-2 gap-2 sm:grid-cols-4" data-strategy-target="root">
               <% [
                 { value: "cheapest",    label: "Moins cher",     icon: "💰", desc: "Prix total" },
@@ -134,13 +134,13 @@
                 { value: "per_unit",    label: "Meilleur €/u",   icon: "🔢", desc: "À l'unité" },
                 { value: "best_per_l",  label: "Meilleur €/L",   icon: "🥛", desc: "Au litre" }
               ].each do |s| %>
-                <label class="relative flex cursor-pointer flex-col items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-center transition hover:border-indigo-300 hover:bg-indigo-50/50 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50 has-[:checked]:ring-1 has-[:checked]:ring-indigo-500">
+                <label class="relative flex cursor-pointer flex-col items-center rounded-xl border border-[#c2c9bb] bg-[#f6f3f2] px-3 py-3 text-center transition hover:border-[#a1d494] hover:bg-[#ecf9e8]/70 has-[:checked]:border-[#2d5a27] has-[:checked]:bg-[#ecf9e8] has-[:checked]:ring-1 has-[:checked]:ring-[#2d5a27]">
                   <%= f.radio_button :strategy, s[:value], checked: s[:value] == "cheapest",
                       class: "sr-only",
                       data: { action: "change->strategy#changed" } %>
                   <span class="text-xl"><%= s[:icon] %></span>
-                  <span class="mt-1 text-xs font-semibold text-slate-800"><%= s[:label] %></span>
-                  <span class="text-[10px] text-slate-500"><%= s[:desc] %></span>
+                  <span class="mt-1 text-xs font-semibold text-[#1b1c1c]"><%= s[:label] %></span>
+                  <span class="text-[10px] text-[#72796e]"><%= s[:desc] %></span>
                 </label>
               <% end %>
             </div>
@@ -150,7 +150,7 @@
           <div>
             <button type="submit"
                     data-compare-target="submitBtn"
-                    class="group relative w-full overflow-hidden rounded-xl bg-indigo-600 px-6 py-3.5 text-base font-bold text-white shadow-md shadow-indigo-200 transition hover:bg-indigo-700 hover:shadow-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 active:scale-[0.98]">
+                    class="group relative w-full overflow-hidden rounded-xl bg-[#2d5a27] px-6 py-3.5 text-base font-bold text-white shadow-md shadow-[#a1d494]/40 transition hover:bg-[#154212] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[#2d5a27] focus:ring-offset-2 active:scale-[0.98]">
               <span data-compare-target="btnText" class="flex items-center justify-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
                   <path fill-rule="evenodd" d="M8.25 6.75a3.75 3.75 0 117.5 0 3.75 3.75 0 01-7.5 0zM15.75 9.75a3 3 0 116 0 3 3 0 01-6 0zM2.25 9.75a3 3 0 116 0 3 3 0 01-6 0zM6.31 15.117A6.745 6.745 0 0112 12a6.745 6.745 0 016.709 7.498.75.75 0 01-.372.568A12.696 12.696 0 0112 21.75c-2.305 0-4.47-.612-6.337-1.684a.75.75 0 01-.372-.568 6.787 6.787 0 011.019-4.38z" clip-rule="evenodd"/>
@@ -170,8 +170,8 @@
       </div>
 
       <%# Footer hint %>
-      <div class="rounded-b-2xl border-t border-slate-100 bg-slate-50 px-6 py-3">
-        <p class="text-center text-xs text-slate-400">
+      <div class="rounded-b-2xl border-t border-[#e4e2e1] bg-[#f6f3f2] px-6 py-3">
+        <p class="text-center text-xs text-[#72796e]">
           Les prix sont récupérés en temps réel depuis les sites officiels des enseignes.
         </p>
       </div>
@@ -181,28 +181,28 @@
 
 <%# ── How it works ── %>
 <section class="mx-auto max-w-5xl px-4 py-16 sm:px-6">
-  <h2 class="text-center text-2xl font-bold text-slate-900 sm:text-3xl">Comment ça marche ?</h2>
+  <h2 class="text-center text-2xl font-bold text-[#1b1c1c] sm:text-3xl">Comment ça marche ?</h2>
   <div class="mt-10 grid gap-6 sm:grid-cols-3">
     <% [
       { step: "1", icon: "📝", title: "Saisissez votre liste", desc: "Entrez vos produits, un par ligne. PanierBot comprend les noms génériques comme 'pâtes' ou 'lait'." },
       { step: "2", icon: "🔍", title: "Analyse automatique", desc: "Notre agent visite les drives en temps réel et extrait les prix de chaque produit." },
       { step: "3", icon: "🏆", title: "Résultat optimal", desc: "Vous obtenez le panier le moins cher, avec le détail par produit et par enseigne." }
     ].each do |card| %>
-      <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:shadow-md">
-        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-xl text-white font-bold shadow-md shadow-indigo-200">
+      <div class="card-mobile-tight rounded-2xl border border-[#c2c9bb] bg-white p-6 shadow-sm transition hover:shadow-md hover:-translate-y-0.5">
+        <div class="animate-float-soft flex h-10 w-10 items-center justify-center rounded-xl bg-[#2d5a27] text-xl font-bold text-white shadow-md shadow-[#a1d494]/40">
           <%= card[:step] %>
         </div>
-        <h3 class="mt-4 text-base font-bold text-slate-900"><%= card[:title] %></h3>
-        <p class="mt-2 text-sm leading-relaxed text-slate-600"><%= card[:desc] %></p>
+        <h3 class="mt-4 text-base font-bold text-[#1b1c1c]"><%= card[:title] %></h3>
+        <p class="mt-2 text-sm leading-relaxed text-[#42493e]"><%= card[:desc] %></p>
       </div>
     <% end %>
   </div>
 </section>
 
 <%# ── Stores logos section ── %>
-<section class="border-t border-slate-200 bg-white py-10">
+<section class="border-t border-[#c2c9bb] bg-white py-10">
   <div class="mx-auto max-w-4xl px-4 sm:px-6">
-    <p class="text-center text-xs font-semibold uppercase tracking-widest text-slate-400">Enseignes comparées</p>
+    <p class="text-center text-xs font-semibold uppercase tracking-widest text-[#72796e]">Enseignes comparées</p>
     <div class="mt-6 flex flex-wrap items-center justify-center gap-6">
       <% [
         { name: "Leclerc", color: "bg-blue-50 text-blue-700 ring-blue-200" },

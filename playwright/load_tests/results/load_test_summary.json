@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T11:44:58.593Z",
+  "generatedAt": "2026-05-26T15:14:37.131Z",
   "apiBaseUrl": "http://localhost:3000",
   "cdpUrl": "http://127.0.0.1:9222",
   "durationSec": 5,
@@ -11,60 +11,71 @@
         "resultJsonPath": "/home/remy/perso/appli_comparatif_course_drive/PanierBot/playwright/load_tests/results/artillery_result_10.json",
         "resultHtmlPath": "/home/remy/perso/appli_comparatif_course_drive/PanierBot/playwright/load_tests/reports/artillery_report_10.html",
         "metrics": {
-          "requests": 50,
+          "requests": 82,
           "errors": 0,
           "errorRate": 0,
+          "vusers": {
+            "failed": 0,
+            "created": 41,
+            "failureRate": 0
+          },
           "latency": {
-            "avgMs": 0,
-            "p95Ms": 0,
-            "minMs": 0,
-            "maxMs": 0
+            "avgMs": 566,
+            "p95Ms": 1176.4,
+            "minMs": 5,
+            "maxMs": 1465
           }
         }
       },
       "scraping": {
         "users": 10,
         "durationSec": 5,
-        "operations": 5825,
+        "operations": 5887,
         "errors": 0,
         "errorRate": 0,
         "latency": {
-          "count": 5825,
-          "minMs": 0.41,
-          "maxMs": 10.31,
-          "avgMs": 0.77,
-          "p95Ms": 1.37
+          "count": 5887,
+          "minMs": 0.52,
+          "maxMs": 7.4,
+          "avgMs": 0.8,
+          "p95Ms": 1.36
         }
       },
       "cdp": {
-        "attempts": 1,
-        "success": 1,
+        "attempts": 20,
+        "success": 20,
         "failures": 0,
         "stabilityPercent": 100,
         "latency": {
-          "avgMs": 5193.18,
-          "p95Ms": 5193.18,
-          "minMs": 5193.18,
-          "maxMs": 5193.18
+          "avgMs": 16.39,
+          "p95Ms": 24.88,
+          "minMs": 7.66,
+          "maxMs": 66.99
         },
         "cdpUrl": "http://127.0.0.1:9222"
       },
       "cpu": {
-        "avgCpuPercent": 27.65,
-        "maxCpuPercent": 69.22,
+        "avgCpuPercent": 33.54,
+        "maxCpuPercent": 84.87,
         "samples": [
-          57.49,
-          42.39,
-          61.53,
-          69.22,
-          23.48,
-          17.89,
-          6.82,
-          11.11,
-          7.89,
-          5.95,
-          11.42,
-          16.66
+          30.49,
+          25.47,
+          34.26,
+          84.87,
+          23.03,
+          14,
+          25.99,
+          26.23,
+          40.19,
+          36.86,
+          45.39,
+          28.75,
+          46.64,
+          44.19,
+          45.31,
+          29.27,
+          5.41,
+          17.3
         ]
       }
     },
@@ -75,62 +86,84 @@
         "resultJsonPath": "/home/remy/perso/appli_comparatif_course_drive/PanierBot/playwright/load_tests/results/artillery_result_50.json",
         "resultHtmlPath": "/home/remy/perso/appli_comparatif_course_drive/PanierBot/playwright/load_tests/reports/artillery_report_50.html",
         "metrics": {
-          "requests": 250,
+          "requests": 212,
           "errors": 0,
           "errorRate": 0,
+          "vusers": {
+            "failed": 0,
+            "created": 106,
+            "failureRate": 0
+          },
           "latency": {
-            "avgMs": 0,
-            "p95Ms": 0,
-            "minMs": 0,
-            "maxMs": 0
+            "avgMs": 2717.4,
+            "p95Ms": 4403.8,
+            "minMs": 5,
+            "maxMs": 5237
           }
         }
       },
       "scraping": {
         "users": 50,
         "durationSec": 5,
-        "operations": 6167,
+        "operations": 4924,
         "errors": 0,
         "errorRate": 0,
         "latency": {
-          "count": 6167,
-          "minMs": 0.41,
-          "maxMs": 9.14,
-          "avgMs": 0.78,
-          "p95Ms": 1.41
+          "count": 4924,
+          "minMs": 0.52,
+          "maxMs": 15,
+          "avgMs": 0.95,
+          "p95Ms": 1.72
         }
       },
       "cdp": {
-        "attempts": 1,
-        "success": 1,
+        "attempts": 100,
+        "success": 100,
         "failures": 0,
         "stabilityPercent": 100,
         "latency": {
-          "avgMs": 5243.45,
-          "p95Ms": 5243.45,
-          "minMs": 5243.45,
-          "maxMs": 5243.45
+          "avgMs": 49.63,
+          "p95Ms": 91.71,
+          "minMs": 0.63,
+          "maxMs": 172.58
         },
         "cdpUrl": "http://127.0.0.1:9222"
       },
       "cpu": {
-        "avgCpuPercent": 29.07,
-        "maxCpuPercent": 67.85,
+        "avgCpuPercent": 41.85,
+        "maxCpuPercent": 67.72,
         "samples": [
-          41.18,
-          52.39,
-          67.85,
-          66.88,
-          36.67,
-          33.41,
-          21.5,
-          19.23,
-          19.72,
-          9.83,
-          2.88,
-          3.37,
-          13.73,
-          18.28
+          28.45,
+          28.56,
+          67.72,
+          66.47,
+          14.63,
+          32.42,
+          45.52,
+          45.59,
+          44.94,
+          46.09,
+          44.03,
+          49.99,
+          46.24,
+          46.9,
+          45.74,
+          47.44,
+          46.77,
+          44.15,
+          46.42,
+          47.63,
+          43.49,
+          45.71,
+          44.25,
+          47.17,
+          43.42,
+          44.48,
+          44.86,
+          44.05,
+          37.12,
+          3.77,
+          13.45
         ]
       }
     },
@@ -141,62 +174,83 @@
         "resultJsonPath": "/home/remy/perso/appli_comparatif_course_drive/PanierBot/playwright/load_tests/results/artillery_result_100.json",
         "resultHtmlPath": "/home/remy/perso/appli_comparatif_course_drive/PanierBot/playwright/load_tests/reports/artillery_report_100.html",
         "metrics": {
-          "requests": 500,
+          "requests": 188,
           "errors": 0,
           "errorRate": 0,
+          "vusers": {
+            "failed": 0,
+            "created": 94,
+            "failureRate": 0
+          },
           "latency": {
-            "avgMs": 0,
-            "p95Ms": 0,
-            "minMs": 0,
-            "maxMs": 0
+            "avgMs": 3904.7,
+            "p95Ms": 6439.7,
+            "minMs": 6,
+            "maxMs": 7032
           }
         }
       },
       "scraping": {
         "users": 100,
         "durationSec": 5,
-        "operations": 6287,
+        "operations": 5681,
         "errors": 0,
         "errorRate": 0,
         "latency": {
-          "count": 6287,
-          "minMs": 0.41,
-          "maxMs": 10.45,
-          "avgMs": 0.77,
-          "p95Ms": 1.41
+          "count": 5681,
+          "minMs": 0.51,
+          "maxMs": 12.9,
+          "avgMs": 0.84,
+          "p95Ms": 1.44
         }
       },
       "cdp": {
-        "attempts": 1,
-        "success": 1,
+        "attempts": 122,
+        "success": 122,
         "failures": 0,
         "stabilityPercent": 100,
         "latency": {
-          "avgMs": 5204.94,
-          "p95Ms": 5204.94,
-          "minMs": 5204.94,
-          "maxMs": 5204.94
+          "avgMs": 40.97,
+          "p95Ms": 155.27,
+          "minMs": 0.67,
+          "maxMs": 179.87
         },
         "cdpUrl": "http://127.0.0.1:9222"
       },
       "cpu": {
-        "avgCpuPercent": 34.59,
-        "maxCpuPercent": 78.31,
+        "avgCpuPercent": 40.74,
+        "maxCpuPercent": 75.11,
         "samples": [
-          28.99,
-          41.16,
-          72.79,
-          78.31,
-          42.37,
-          44.75,
-          39.28,
-          36,
-          37.14,
-          22.63,
-          2.57,
-          2.88,
-          16.92,
-          18.54
+          22.76,
+          27.65,
+          75.11,
+          47.35,
+          19.85,
+          44.34,
+          45.49,
+          44.68,
+          48.83,
+          44.3,
+          41.91,
+          44.09,
+          47.04,
+          48.64,
+          46.66,
+          45.72,
+          46.58,
+          48.42,
+          45.99,
+          42.76,
+          46.3,
+          48.34,
+          45.09,
+          44.7,
+          43.78,
+          46.81,
+          35.85,
+          2.13,
+          14.04,
+          16.89
         ]
       }
     }

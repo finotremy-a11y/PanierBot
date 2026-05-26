@@ -41,6 +41,8 @@ const CITY         = String(args.city || "Rodez");
 const MAX_RETRIES  = Math.max(1, parseInt(String(args["max-retries"] || "3"), 10));
 const CDP_URL      = "http://localhost:9222";
 const LECLERC_URL  = "https://www.leclercdrive.fr/";
+const CDP_CONNECT_RETRIES = Math.max(1, parseInt(String(process.env.CDP_CONNECT_RETRIES || "3"), 10));
+const CDP_CONNECT_TIMEOUT_MS = Math.max(5000, parseInt(String(process.env.CDP_CONNECT_TIMEOUT_MS || "45000"), 10));
 
 // ─── Selector constants (overridable between retries) ────────────────────────
 const COOKIE_SELECTORS = [
@@ -300,6 +302,45 @@ async function pickBestPage(context) {
   return pages[0];
 }
 
+async function connectOverCdpWithRetry() {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= CDP_CONNECT_RETRIES; attempt += 1) {
+    try {
+      const browser = await chromium.connectOverCDP(CDP_URL, { timeout: CDP_CONNECT_TIMEOUT_MS });
+      return browser;
+    } catch (err) {
+      lastError = err;
+      warn(`Connexion CDP échouée (${attempt}/${CDP_CONNECT_RETRIES}) : ${err.message}`);
+      if (attempt < CDP_CONNECT_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+      }
+    }
+  }
+
+  throw lastError || new Error("Connexion CDP impossible");
+}
+
+async function ensureOperationalPage(browser, context, page) {
+  let safeContext = context;
+  let safePage = page;
+
+  const browserConnected = browser && typeof browser.isConnected === "function" ? browser.isConnected() : Boolean(browser);
+  if (!browserConnected) {
+    throw new Error("Browser CDP déconnecté");
+  }
+
+  if (!safeContext || safeContext.isClosed()) {
+    safeContext = await browser.newContext();
+  }
+
+  if (!safePage || safePage.isClosed()) {
+    safePage = await pickBestPage(safeContext);
+  }
+
+  return { context: safeContext, page: safePage };
+}
+
 // ─── Adaptive selector patch applied between retries ─────────────────────────
 /**
  * On attempt N, analyse the last error and patch selectors or logic accordingly.
@@ -411,7 +452,7 @@ async function main() {
   let browser;
   try {
     log(`Connexion CDP à ${CDP_URL}…`);
-    browser = await chromium.connectOverCDP(CDP_URL);
+    browser = await connectOverCdpWithRetry();
     log(`Connecté. Contextes disponibles : ${browser.contexts().length}`);
   } catch (err) {
     error(`Impossible de se connecter au navigateur local : ${err.message}`);
@@ -436,11 +477,30 @@ async function main() {
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
+      const operational = await ensureOperationalPage(browser, context, page);
+      context = operational.context;
+      page = operational.page;
+
       success = await runAttempt(page, attempt);
       if (success) break;
     } catch (err) {
       lastError = err.message;
       error(`Tentative ${attempt} échouée : ${err.message}`);
+
+      if (String(lastError).toLowerCase().includes("target page, context or browser has been closed")
+        || String(lastError).toLowerCase().includes("browser cdp déconnecté")) {
+        try {
+          if (!browser || (typeof browser.isConnected === "function" && !browser.isConnected())) {
+            browser = await connectOverCdpWithRetry();
+          }
+          const operational = await ensureOperationalPage(browser, context, page);
+          context = operational.context;
+          page = operational.page;
+        } catch (recoveryError) {
+          warn(`Reconnexion CDP échouée: ${recoveryError.message}`);
+        }
+      }
+
       if (String(lastError).toLowerCase().includes("captcha")) {
         break;
       }

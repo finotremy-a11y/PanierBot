@@ -5,7 +5,7 @@
     <title><%= content_for(:title) || "PanierBot — Comparez vos courses" %></title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover">
     <meta name="description" content="Comparez les prix de vos courses en drive en quelques secondes. Économisez jusqu'à 30%.">
-    <meta name="theme-color" content="#4f46e5">
+    <meta name="theme-color" content="#2d5a27">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="application-name" content="PanierBot">
@@ -24,46 +24,46 @@
     <%= javascript_importmap_tags %>
   </head>
 
-  <body class="min-h-screen bg-slate-50 antialiased">
+  <body class="min-h-screen bg-[#fbf9f8] text-[#1b1c1c] antialiased">
     <%# Skip link for accessibility -%>
     <a href="#main-content" class="skip-link">Aller au contenu principal</a>
 
     <%# ── Navigation (Premium, accessible, responsive) ── %>
-    <nav class="fixed inset-x-0 top-0 z-40 border-b border-slate-200/80 bg-white/95 backdrop-blur-md" role="navigation" aria-label="Navigation principale">
+    <nav class="fixed inset-x-0 top-0 z-40 border-b border-[#c2c9bb]/80 bg-[#ffffff]/95 backdrop-blur-md" role="navigation" aria-label="Navigation principale">
       <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
         <%# Logo -%>
         <%= link_to root_path, class: "flex items-center gap-2 group" do %>
-          <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-sm group-hover:bg-indigo-700 group-focus-visible:ring-2 group-focus-visible:ring-indigo-500 group-focus-visible:ring-offset-2 transition-colors">
+          <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2d5a27] text-white shadow-sm group-hover:bg-[#154212] group-focus-visible:ring-2 group-focus-visible:ring-[#2d5a27] group-focus-visible:ring-offset-2 transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M2.25 2.25a.75.75 0 000 1.5h1.386c.17 0 .318.114.362.278l2.558 9.592a3.752 3.752 0 00-2.806 3.63c0 .414.336.75.75.75h15.75a.75.75 0 000-1.5H5.378A2.25 2.25 0 017.5 15h11.218a.75.75 0 00.674-.421 60.358 60.358 0 002.96-7.228.75.75 0 00-.525-.965A60.864 60.864 0 005.68 4.509l-.232-.867A1.875 1.875 0 003.636 2.25H2.25z"/>
               <path d="M3.75 20.25a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zM16.5 20.25a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0z"/>
             </svg>
           </span>
-          <span class="text-lg font-bold text-slate-900">Panier<span class="text-indigo-600">Bot</span></span>
+          <span class="text-lg font-bold text-[#1b1c1c]">Panier<span class="text-[#2d5a27]">Bot</span></span>
         <% end %>
 
         <%# Navigation links (desktop) -%>
         <div class="flex items-center gap-1 sm:gap-2">
           <%= link_to "Comparer", root_path,
-              class: "hidden sm:inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 transition-colors" %>
+              class: "hidden sm:inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-[#42493e] hover:bg-[#f0eded] focus-visible:ring-2 focus-visible:ring-[#2d5a27] focus-visible:ring-offset-2 transition-colors" %>
           <% if user_signed_in? %>
             <%= link_to "Plans", plans_path,
-                class: "hidden sm:inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 transition-colors" %>
+                class: "hidden sm:inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-[#42493e] hover:bg-[#f0eded] focus-visible:ring-2 focus-visible:ring-[#2d5a27] focus-visible:ring-offset-2 transition-colors" %>
             <%= link_to "Compte", account_path,
-                class: "hidden sm:inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 transition-colors" %>
+                class: "hidden sm:inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-[#42493e] hover:bg-[#f0eded] focus-visible:ring-2 focus-visible:ring-[#2d5a27] focus-visible:ring-offset-2 transition-colors" %>
             <%= button_to "Déconnexion", destroy_user_session_path, method: :delete,
-                class: "hidden sm:inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 transition-colors" %>
+                class: "hidden sm:inline-flex items-center rounded-lg border border-[#c2c9bb] bg-white px-3 py-1.5 text-sm font-semibold text-[#42493e] shadow-sm hover:bg-[#f6f3f2] focus-visible:ring-2 focus-visible:ring-[#2d5a27] focus-visible:ring-offset-2 transition-colors" %>
           <% else %>
             <%= link_to "Connexion", new_user_session_path,
-                class: "hidden sm:inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 transition-colors" %>
+                class: "hidden sm:inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-[#42493e] hover:bg-[#f0eded] focus-visible:ring-2 focus-visible:ring-[#2d5a27] focus-visible:ring-offset-2 transition-colors" %>
             <%= link_to "S'inscrire", new_user_registration_path,
-                class: "hidden sm:inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 transition-colors" %>
+                class: "hidden sm:inline-flex items-center rounded-lg border border-[#c2c9bb] bg-white px-3 py-1.5 text-sm font-semibold text-[#42493e] shadow-sm hover:bg-[#f6f3f2] focus-visible:ring-2 focus-visible:ring-[#2d5a27] focus-visible:ring-offset-2 transition-colors" %>
           <% end %>
         </div>
 
         <%# CTA Button -%>
         <%= link_to root_path,
-            class: "inline-flex items-center rounded-lg bg-indigo-600 px-3 py-1.5 sm:px-4 text-sm font-semibold text-white shadow-md hover:bg-indigo-700 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 transition-all hover:shadow-lg hover:-translate-y-px" do %>
+            class: "inline-flex items-center rounded-lg bg-[#2d5a27] px-3 py-1.5 sm:px-4 text-sm font-semibold text-white shadow-md hover:bg-[#154212] focus-visible:ring-2 focus-visible:ring-[#2d5a27] focus-visible:ring-offset-2 transition-all hover:shadow-lg hover:-translate-y-px" do %>
           <svg class="h-4 w-4 mr-1 sm:mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M12 2a10 10 0 110 20 10 10 0 010-20zm5 11H7v-2h10v2z"/>
           </svg>
@@ -96,49 +96,49 @@
     <% end %>
 
     <%# ── Main content ── %>
-    <main id="main-content" class="pt-16 min-h-screen flex flex-col">
+    <main id="main-content" class="min-h-screen flex flex-col pt-20 sm:pt-24">
       <%= yield %>
     </main>
 
     <%# ── Footer (Premium, accessible, responsive) ── %>
-    <footer class="mt-20 border-t border-slate-200 bg-white py-8 sm:py-12" role="contentinfo">
+    <footer class="mt-20 border-t border-[#c2c9bb] bg-[#ffffff] py-8 sm:py-12" role="contentinfo">
       <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
         <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-4 mb-8">
           <%# Company info -%>
           <div class="space-y-4">
-            <h3 class="font-bold text-slate-900">PanierBot</h3>
-            <p class="text-sm text-slate-600">Comparez les prix en drive et économisez jusqu'à 30% sur vos courses.</p>
-            <p class="text-xs text-slate-500">Leclerc • Carrefour • Intermarché • Super U</p>
+            <h3 class="font-bold text-[#1b1c1c]">PanierBot</h3>
+            <p class="text-sm text-[#42493e]">Comparez les prix en drive et économisez jusqu'à 30% sur vos courses.</p>
+            <p class="text-xs text-[#72796e]">Leclerc • Carrefour • Intermarché • Super U</p>
           </div>
 
           <%# Links -%>
           <div class="space-y-3">
-            <h4 class="font-semibold text-slate-900">Ressources</h4>
+            <h4 class="font-semibold text-[#1b1c1c]">Ressources</h4>
             <ul class="space-y-2 text-sm">
-              <li><%= link_to "Blog", "#", class: "text-slate-600 hover:text-indigo-600 transition-colors" %></li>
-              <li><%= link_to "FAQ", "#", class: "text-slate-600 hover:text-indigo-600 transition-colors" %></li>
-              <li><%= link_to "Aide", "#", class: "text-slate-600 hover:text-indigo-600 transition-colors" %></li>
+              <li><%= link_to "Blog", "#", class: "text-[#42493e] hover:text-[#2d5a27] transition-colors" %></li>
+              <li><%= link_to "FAQ", "#", class: "text-[#42493e] hover:text-[#2d5a27] transition-colors" %></li>
+              <li><%= link_to "Aide", "#", class: "text-[#42493e] hover:text-[#2d5a27] transition-colors" %></li>
             </ul>
           </div>
 
           <%# Legal -%>
           <div class="space-y-3">
-            <h4 class="font-semibold text-slate-900">Légal</h4>
+            <h4 class="font-semibold text-[#1b1c1c]">Légal</h4>
             <ul class="space-y-2 text-sm">
-              <li><%= link_to "Mentions légales", "#", class: "text-slate-600 hover:text-indigo-600 transition-colors" %></li>
-              <li><%= link_to "Confidentialité", "#", class: "text-slate-600 hover:text-indigo-600 transition-colors" %></li>
-              <li><%= link_to "Conditions", "#", class: "text-slate-600 hover:text-indigo-600 transition-colors" %></li>
+              <li><%= link_to "Mentions légales", "#", class: "text-[#42493e] hover:text-[#2d5a27] transition-colors" %></li>
+              <li><%= link_to "Confidentialité", "#", class: "text-[#42493e] hover:text-[#2d5a27] transition-colors" %></li>
+              <li><%= link_to "Conditions", "#", class: "text-[#42493e] hover:text-[#2d5a27] transition-colors" %></li>
             </ul>
           </div>
 
           <%# Social -%>
           <div class="space-y-3">
-            <h4 class="font-semibold text-slate-900">Suivez-nous</h4>
+            <h4 class="font-semibold text-[#1b1c1c]">Suivez-nous</h4>
             <div class="flex gap-2">
-              <a href="#" aria-label="Twitter" class="inline-flex items-center justify-center h-10 w-10 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-colors">
+              <a href="#" aria-label="Twitter" class="inline-flex items-center justify-center h-10 w-10 rounded-lg border border-[#c2c9bb] text-[#42493e] hover:bg-[#f6f3f2] hover:text-[#2d5a27] transition-colors">
                 𝕏
               </a>
-              <a href="#" aria-label="Facebook" class="inline-flex items-center justify-center h-10 w-10 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-colors">
+              <a href="#" aria-label="Facebook" class="inline-flex items-center justify-center h-10 w-10 rounded-lg border border-[#c2c9bb] text-[#42493e] hover:bg-[#f6f3f2] hover:text-[#2d5a27] transition-colors">
                 f
               </a>
             </div>
@@ -146,9 +146,9 @@
         </div>
 
         <%# Copyright -%>
-        <div class="border-t border-slate-200 pt-8 text-center space-y-2">
-          <p class="text-sm text-slate-600">PanierBot &mdash; Comparez les prix en drive en quelques secondes.</p>
-          <p class="text-xs text-slate-500">© 2024 PanierBot. Tous droits réservés.</p>
+        <div class="border-t border-[#c2c9bb] pt-8 text-center space-y-2">
+          <p class="text-sm text-[#42493e]">PanierBot &mdash; Comparez les prix en drive en quelques secondes.</p>
+          <p class="text-xs text-[#72796e]">© 2024 PanierBot. Tous droits réservés.</p>
         </div>
       </div>
     </footer>

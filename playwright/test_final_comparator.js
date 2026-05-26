@@ -126,6 +126,13 @@ function runHelpersAudit() {
   const filteredUnit = filterProducts(unitProducts, "per_unit", { storeName: "test" });
   assert(!filteredUnit.some((product) => product.id === "unit-missing"), "per_unit doit filtrer les produits sans quantité");
 
+  const noisyProducts = [
+    normalizeProduct({ name: "Après-shampoing réparateur", price: 0.27, quantity: "250ml", availability: "disponible", id: "noise-shampoo", url: "noise-shampoo" }, { store: "test", index: 0 }),
+    normalizeProduct({ name: "Pâtes Penne 500g", price: 1.1, quantity: "500g", availability: "disponible", id: "good-pasta", url: "good-pasta" }, { store: "test", index: 1 })
+  ];
+  const filteredByQuery = filterProducts(noisyProducts, "cheapest", { storeName: "test", query: "pâtes" });
+  assert(filteredByQuery.length === 1 && filteredByQuery[0].id === "good-pasta", "Le filtrage par requête doit exclure les produits hors sujet");
+
   log("📊 Tri");
   const cheapestProducts = [
     normalizeProduct({ name: "Cheap A", price: 1.8, quantity: "500g", availability: "disponible", id: "cheap-a", url: "cheap-a" }, { store: "test", index: 0 }),

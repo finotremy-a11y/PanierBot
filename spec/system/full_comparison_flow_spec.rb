@@ -44,7 +44,7 @@ RSpec.describe "Full comparison flow", type: :system do
     STRATEGIES.each do |strategy|
       it "runs the complete flow with strategy #{strategy}" do
         sign_in user
-        submit_comparison(items: ["  pâtes  "], mode: "single_store", store: "leclerc", strategy: strategy)
+        submit_comparison(items: [ "  pâtes  " ], mode: "single_store", store: "leclerc", strategy: strategy)
 
         expect(page).to have_content("Résultats de comparaison")
         expect(page).to have_content("Mono-enseigne")
@@ -60,9 +60,9 @@ RSpec.describe "Full comparison flow", type: :system do
         expect(result[:success]).to eq(true)
         expect(result[:mode]).to eq("single_store")
         expect(result[:strategy]).to eq(strategy)
-        expect(result[:items]).to eq(["pâtes"])
+        expect(result[:items]).to eq([ "pâtes" ])
         expect(result.dig(:comparison, :agent_audit, :errors)).to eq([])
-        expect(result.dig(:comparison, :agent_audit, :received_items)).to eq(["pâtes"])
+        expect(result.dig(:comparison, :agent_audit, :received_items)).to eq([ "pâtes" ])
         expect(result.dig(:comparison, :agent_audit, :steps)).to eq(
           %w[normalizeItems searchProduct extractProductList normalizeUnits computeDerivedPrices sort pickBest]
         )
@@ -75,7 +75,7 @@ RSpec.describe "Full comparison flow", type: :system do
     STRATEGIES.each do |strategy|
       it "runs the complete flow with strategy #{strategy}" do
         sign_in user
-        submit_comparison(items: ["pâtes"], mode: "multi_store", store: nil, strategy: strategy)
+        submit_comparison(items: [ "pâtes" ], mode: "multi_store", store: nil, strategy: strategy)
 
         expect(page).to have_content("Résultats de comparaison")
         expect(page).to have_content("Multi-enseignes")
@@ -91,7 +91,7 @@ RSpec.describe "Full comparison flow", type: :system do
         expect(result[:success]).to eq(true)
         expect(result[:mode]).to eq("multi_store")
         expect(result[:strategy]).to eq(strategy)
-        expect(result[:items]).to eq(["pâtes"])
+        expect(result[:items]).to eq([ "pâtes" ])
 
         optimal = result.dig(:comparison, :optimal_cart)
         expect(optimal[:total].to_f).to be > 0

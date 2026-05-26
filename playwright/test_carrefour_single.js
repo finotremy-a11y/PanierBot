@@ -16,7 +16,7 @@ const args = minimist(process.argv.slice(2), {
 console.log("\n🟥 Démarrage Audit Carrefour");
 console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
-await runSingleStoreAudit({
+const result = await runSingleStoreAudit({
   storeKey: "carrefour",
   city: String(args.city || "Paris"),
   query: String(args.query || "pâtes"),
@@ -28,4 +28,4 @@ await runSingleStoreAudit({
 assertUnitNormalization();
 
 console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-console.log("🟢 Carrefour validée (CDP)\n");
+console.log(`🟢 Carrefour validée (${result.live ? "CDP" : "fallback offline"})\n`);

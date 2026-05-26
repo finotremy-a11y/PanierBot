@@ -101,6 +101,7 @@ function summarizeStores(cartByStore = {}) {
       mode,
       strategy,
       city,
+      unavailable_stores: Array.isArray(globalAudit?.unavailableStores) ? globalAudit.unavailableStores : [],
       total: Number(finalCart?.total || 0),
       stores: summarizeStores(finalCart?.cartByStore),
       results: results.map((entry) => ({

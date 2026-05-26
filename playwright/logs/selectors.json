@@ -1,6 +1,267 @@
 {
   "version": 1,
   "createdAt": "1970-01-01T00:00:00.000Z",
-  "updatedAt": "1970-01-01T00:00:00.000Z",
-  "stores": {}
+  "updatedAt": "2026-05-22T11:10:44.953Z",
+  "stores": {
+    "leclerc": {
+      "critical": {
+        "searchBar": {
+          "current": "input[name='q']",
+          "fallbacks": [
+            "input[name='q']",
+            "input[type='search']",
+            "input[placeholder*='recherche' i]",
+            "header input[type='search']"
+          ],
+          "broken": [],
+          "history": []
+        },
+        "productCards": {
+          "current": "li.liWCRS310_Product",
+          "fallbacks": [
+            "li.liWCRS310_Product",
+            "[data-product-id]",
+            "article[class*='product' i]",
+            "li[class*='product' i]"
+          ],
+          "broken": [],
+          "history": []
+        },
+        "price": {
+          "current": ".pWCRS310_PrixUnitaire",
+          "fallbacks": [
+            ".pWCRS310_PrixUnitaire",
+            ".pWCRS310_PrixUnitairePartieEntiere",
+            "[class*='PrixUnitaire' i]",
+            "[class*='prix' i]",
+            "[class*='price' i]",
+            "[data-testid*='price' i]"
+          ],
+          "broken": [],
+          "history": []
+        },
+        "pricePerKg": {
+          "current": "[class*='PrixUniteMesure' i]",
+          "fallbacks": [
+            "[class*='PrixUniteMesure' i]",
+            "[class*='unit' i]",
+            "[class*='kg' i]"
+          ],
+          "broken": [],
+          "history": []
+        },
+        "addToCart": {
+          "current": ".aWCRS310_Add",
+          "fallbacks": [
+            ".aWCRS310_Add",
+            "a.aWCRS310_Add_Produit_Fiche",
+            "a[aria-label*='Ajout produit' i]",
+            "a:has-text('Ajouter au panier')",
+            "button:has-text('Ajouter au panier')",
+            "button:has-text('Ajouter')"
+          ],
+          "broken": [],
+          "history": []
+        }
+      }
+    },
+    "carrefour": {
+      "critical": {
+        "searchBar": {
+          "current": "input[name='q']",
+          "fallbacks": [
+            "input[name='q']",
+            "#vendor-search-handler",
+            "input[type='search']",
+            "input[aria-label*='rechercher' i]"
+          ],
+          "broken": [],
+          "history": []
+        },
+        "productCards": {
+          "current": ".product-list-card-plp-grid-new",
+          "fallbacks": [
+            ".product-list-card-plp-grid-new",
+            "[data-testid='product-card']",
+            "div.by_wrapper",
+            "article[class*='product' i]"
+          ],
+          "broken": [],
+          "history": []
+        },
+        "price": {
+          "current": "[class*='price' i]",
+          "fallbacks": [
+            "[class*='price' i]",
+            "div.by_price",
+            "[data-testid*='price' i]"
+          ],
+          "broken": [
+            {
+              "store": "carrefour",
+              "selector": "div.by_price",
+              "reason": "iteration 1: selector introuvable",
+              "url": "https://www.carrefour.fr/s?q=p%C3%A2tes",
+              "at": "2026-05-22T11:09:20.341Z"
+            }
+          ],
+          "history": [
+            {
+              "event": "promoted",
+              "selector": "[class*='price' i]",
+              "source": "auto-fallback",
+              "at": "2026-05-22T11:09:20.376Z"
+            }
+          ]
+        },
+        "pricePerKg": {
+          "current": "[class*='unit' i]",
+          "fallbacks": [
+            "[class*='unit' i]",
+            "div.by_mentions",
+            "[data-testid*='price-per' i]"
+          ],
+          "broken": [
+            {
+              "store": "carrefour",
+              "selector": "div.by_mentions",
+              "reason": "iteration 1: selector introuvable",
+              "url": "https://www.carrefour.fr/s?q=p%C3%A2tes",
+              "at": "2026-05-22T11:09:20.387Z"
+            }
+          ],
+          "history": [
+            {
+              "event": "promoted",
+              "selector": "[class*='unit' i]",
+              "source": "auto-fallback",
+              "at": "2026-05-22T11:09:20.484Z"
+            }
+          ]
+        },
+        "addToCart": {
+          "current": "button[aria-label*='Ajouter' i]",
+          "fallbacks": [
+            "button[aria-label*='Ajouter' i]",
+            "button[label='Acheter']",
+            "button:has-text('Ajouter')"
+          ],
+          "broken": [],
+          "history": []
+        }
+      }
+    },
+    "intermarche": {
+      "critical": {
+        "searchBar": {
+          "current": "input[name='search']",
+          "fallbacks": [
+            "input[name='search']",
+            "input[name='q']",
+            "input[type='search']",
+            "input[placeholder*='recherche' i]"
+          ],
+          "broken": [],
+          "history": []
+        },
+        "productCards": {
+          "current": "[data-testid='product-card']",
+          "fallbacks": [
+            "[data-testid='product-card']",
+            "article[class*='product' i]",
+            "li[class*='product' i]",
+            "section article"
+          ],
+          "broken": [],
+          "history": []
+        },
+        "price": {
+          "current": "[data-testid*='price' i]",
+          "fallbacks": [
+            "[data-testid*='price' i]",
+            "[class*='price' i]",
+            "[class*='tarif' i]"
+          ],
+          "broken": [],
+          "history": []
+        },
+        "pricePerKg": {
+          "current": "[data-testid*='price-per' i]",
+          "fallbacks": [
+            "[data-testid*='price-per' i]",
+            "[class*='unit' i]",
+            "[class*='kg' i]"
+          ],
+          "broken": [],
+          "history": []
+        },
+        "addToCart": {
+          "current": "button[data-testid*='add' i]",
+          "fallbacks": [
+            "button[data-testid*='add' i]",
+            "button:has-text('Ajouter au panier')",
+            "button:has-text('Ajouter')"
+          ],
+          "broken": [],
+          "history": []
+        }
+      }
+    },
+    "superu": {
+      "critical": {
+        "searchBar": {
+          "current": "input[type='search']",
+          "fallbacks": [
+            "input[type='search']",
+            "input[name='search']",
+            "input[name='q']",
+            "input[placeholder*='recherche' i]"
+          ],
+          "broken": [],
+          "history": []
+        },
+        "productCards": {
+          "current": ".search-result-items > li",
+          "fallbacks": [
+            ".search-result-items > li",
+            ".product-tile",
+            "[data-testid='product-card']",
+            "article[class*='product' i]"
+          ],
+          "broken": [],
+          "history": []
+        },
+        "price": {
+          "current": "[class*='price' i]",
+          "fallbacks": [
+            "[class*='price' i]",
+            "[data-testid*='price' i]",
+            ".product-tile [class*='amount' i]"
+          ],
+          "broken": [],
+          "history": []
+        },
+        "pricePerKg": {
+          "current": "[class*='unit' i]",
+          "fallbacks": [
+            "[class*='unit' i]",
+            "[class*='kg' i]",
+            "[data-testid*='price-per' i]"
+          ],
+          "broken": [],
+          "history": []
+        },
+        "addToCart": {
+          "current": "button[data-testid*='add' i]",
+          "fallbacks": [
+            "button[data-testid*='add' i]",
+            "button:has-text('Ajouter au panier')",
+            "button:has-text('Ajouter')"
+          ],
+          "broken": [],
+          "history": []
+        }
+      }
+    }
+  }
 }

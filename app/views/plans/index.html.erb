@@ -1,18 +1,18 @@
 <% content_for :title, "Plans" %>
 
 <section class="mx-auto max-w-5xl px-4 py-10 sm:px-6">
-  <h1 class="text-3xl font-bold text-slate-900">Plans PanierBot</h1>
-  <p class="mt-2 text-sm text-slate-600">Choisissez le plan adapté à votre volume.</p>
+  <h1 class="text-3xl font-bold text-[#1b1c1c]">Plans PanierBot</h1>
+  <p class="mt-2 text-sm text-[#42493e]">Choisissez le plan adapté à votre volume.</p>
 
   <div class="mt-8 grid gap-4 md:grid-cols-3">
     <% @plans.each do |plan_key, plan| %>
-      <article class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 class="text-xl font-semibold text-slate-900"><%= plan[:label] %></h2>
-        <p class="mt-3 text-sm text-slate-600"><%= plan[:features] %></p>
-        <p class="mt-2 text-xs font-medium uppercase tracking-wide text-slate-500"><%= plan[:limits] %></p>
+      <article class="rounded-2xl border border-[#c2c9bb] bg-white p-6 shadow-sm">
+        <h2 class="text-xl font-semibold text-[#1b1c1c]"><%= plan[:label] %></h2>
+        <p class="mt-3 text-sm text-[#42493e]"><%= plan[:features] %></p>
+        <p class="mt-2 text-xs font-medium uppercase tracking-wide text-[#72796e]"><%= plan[:limits] %></p>
 
         <div class="mt-6">
-          <%= link_to "Sélectionner", billing_path(plan: plan_key), class: "inline-flex rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700" %>
+          <%= link_to "Sélectionner", billing_path(plan: plan_key), class: "inline-flex rounded-lg bg-[#2d5a27] px-4 py-2 text-sm font-semibold text-white hover:bg-[#154212]" %>
         </div>
       </article>
     <% end %>

@@ -1,0 +1,17 @@
+{
+  "updatedAt": "2026-05-26T15:23:59.596Z",
+  "stores": {
+    "intermarche": {
+      "reason": "Sélection magasin: Acces bloque par anti-bot/captcha Intermarche (verification JS requise)",
+      "unavailableUntil": 1779809771371,
+      "lastFailureAt": "2026-05-26T15:21:11.371Z",
+      "failures": 4
+    },
+    "superu": {
+      "reason": "Super U: recherche retry échouée (Saisie recherche échouée: Clic sur le champ de recherche Super U impossible)",
+      "unavailableUntil": 1779809939593,
+      "lastFailureAt": "2026-05-26T15:23:59.593Z",
+      "failures": 1
+    }
+  }
+}

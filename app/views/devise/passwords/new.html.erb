@@ -1,0 +1,53 @@
+<% content_for :title, "Mot de passe oublié — PanierBot" %>
+
+<section class="hero-noise relative overflow-hidden bg-gradient-to-br from-[#2d5a27] via-[#23501e] to-[#154212] pb-16 pt-20 text-white sm:pb-20 sm:pt-24">
+  <div class="animate-aurora pointer-events-none absolute -top-24 right-0 h-80 w-80 rounded-full bg-white/5 blur-3xl"></div>
+  <div class="animate-aurora animate-delay-1 pointer-events-none absolute bottom-0 left-0 h-60 w-60 rounded-full bg-[#a1d494]/30 blur-3xl"></div>
+
+  <div class="relative mx-auto max-w-3xl px-4 text-center sm:px-6">
+    <span class="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-[#ecf9e8] ring-1 ring-white/20">
+      Récupération compte
+    </span>
+    <h1 class="mt-4 text-4xl font-extrabold tracking-tight sm:text-5xl">Mot de passe oublié ?</h1>
+    <p class="mt-4 text-base text-[#d9e6da] sm:text-lg">Saisissez votre email, nous vous enverrons un lien de réinitialisation.</p>
+  </div>
+</section>
+
+<section class="mt-8 px-4 pb-20 sm:mt-10 sm:px-6">
+  <div class="mx-auto max-w-md">
+    <div class="card-mobile-tight premium-outline surface-soft space-y-6 rounded-2xl border border-[#c2c9bb] bg-white p-6 shadow-[0_12px_30px_rgba(0,0,0,0.08)] sm:p-8">
+      <h2 class="text-2xl font-extrabold text-[#1b1c1c]">Réinitialisation</h2>
+      <p class="mt-2 text-sm text-[#42493e]">Entrez l’adresse liée à votre compte PanierBot.</p>
+
+      <% if resource.errors.any? %>
+        <div class="alert alert-error mt-4" role="alert">
+          <p class="font-semibold">Échec de la demande :</p>
+          <ul class="mt-2 list-disc space-y-1 pl-5 text-sm">
+            <% resource.errors.full_messages.each do |message| %>
+              <li><%= message %></li>
+            <% end %>
+          </ul>
+        </div>
+      <% end %>
+
+      <%= form_for(resource, as: resource_name, url: password_path(resource_name), html: { method: :post, class: "space-y-6" }) do |f| %>
+        <div>
+          <%= f.label :email, "Email", class: "mb-1.5 block text-sm font-medium text-[#42493e]" %>
+          <%= f.email_field :email, autofocus: true, autocomplete: "email", class: "input" %>
+        </div>
+
+        <%= f.submit "Envoyer le lien de réinitialisation", class: "btn btn-primary btn-lg w-full" %>
+      <% end %>
+
+      <div class="space-y-3 border-t border-[#e4e2e1] pt-5 text-sm">
+        <p>
+          <%= link_to "Retour à la connexion", new_session_path(resource_name), class: "font-semibold text-[#2d5a27] underline-offset-2 hover:underline" %>
+        </p>
+        <p class="text-[#42493e]">
+          Pas encore de compte ?
+          <%= link_to "Créer un compte", new_registration_path(resource_name), class: "font-semibold text-[#2d5a27] underline-offset-2 hover:underline" %>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>

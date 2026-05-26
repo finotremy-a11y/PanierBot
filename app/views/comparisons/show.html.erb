@@ -16,41 +16,41 @@
 <main class="mx-auto max-w-6xl px-4 py-6 sm:py-10 sm:px-6 lg:px-8">
   <%# ── Breadcrumb / Back link ── %>
   <nav class="mb-8 flex items-center gap-2 text-sm" aria-label="Chemin de navigation">
-    <%= link_to "Accueil", root_path, class: "text-slate-500 hover:text-indigo-600 transition-colors" %>
-    <span class="text-slate-300">/</span>
-    <span class="font-medium text-slate-900" aria-current="page">Résultats</span>
+    <%= link_to "Accueil", root_path, class: "text-[#72796e] hover:text-[#2d5a27] transition-colors" %>
+    <span class="text-[#c2c9bb]">/</span>
+    <span class="font-medium text-[#1b1c1c]" aria-current="page">Résultats</span>
   </nav>
 
   <%# ── Page header section ── %>
-  <div class="card-premium mb-8">
+  <div class="card-premium animate-slide-up premium-outline surface-soft mb-8">
     <div class="card-body">
       <div class="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
         <div class="flex-1 min-w-0">
-          <h1 class="text-3xl font-extrabold text-slate-900 sm:text-4xl">
+          <h1 class="animate-fade-in text-3xl font-extrabold text-[#1b1c1c] sm:text-4xl">
             Résultats de comparaison
           </h1>
           
           <%# Status badges -%>
           <div class="mt-4 flex flex-wrap gap-2">
             <% if items.any? %>
-              <span class="badge badge-neutral">
+              <span class="badge badge-neutral animate-scale-in animate-delay-1">
                 📦 <%= items.size %> produit<%= items.size > 1 ? "s" : "" %>
               </span>
             <% end %>
-            <span class="badge badge-primary">
+            <span class="badge badge-primary animate-scale-in animate-delay-2">
               <%= mode == "multi_store" ? "🏪 Multi-enseignes" : "🏪 Mono-enseigne" %>
             </span>
             <% strategy_label = { "cheapest" => "💰 Moins cher", "best_per_kg" => "⚖️ €/kg", "per_unit" => "🔢 €/u", "best_per_l" => "🥛 €/L" }[strategy] || strategy %>
-            <span class="badge" style="background-color: rgb(249, 240, 255); color: rgb(126, 34, 206); border: 1px solid rgb(243, 232, 255);">
+            <span class="badge animate-scale-in animate-delay-3" style="background-color: #ecf9e8; color: #23501e; border: 1px solid #a1d494;">
               <%= strategy_label %>
             </span>
           </div>
 
           <%# Search terms -%>
           <% if items.any? %>
-            <div class="mt-4 rounded-lg bg-slate-50 p-3 border border-slate-200">
-              <p class="text-xs font-semibold uppercase tracking-wide text-slate-600">Articles recherchés</p>
-              <p class="mt-2 text-sm text-slate-700 line-clamp-2">
+            <div class="mt-4 rounded-lg border border-[#c2c9bb] bg-[#f6f3f2] p-3">
+              <p class="text-xs font-semibold uppercase tracking-wide text-[#42493e]">Articles recherchés</p>
+              <p class="mt-2 text-sm text-[#42493e] line-clamp-2">
                 <%= items.map(&:capitalize).join(" • ") %>
               </p>
             </div>
@@ -73,7 +73,7 @@
 
     <% if is_processing %>
       <%# ── Processing state ── %>
-      <div class="card-premium ring-2 ring-indigo-200"
+      <div class="card-premium animate-slide-up premium-outline ring-2 ring-[#a1d494]"
            data-controller="compare"
            data-compare-polling-url-value="<%= status_comparison_path(result_id) %>"
            data-compare-redirect-url-value="<%= comparison_path(result_id) %>"
@@ -87,19 +87,19 @@
           <div class="mt-6 flex flex-wrap justify-center gap-4 text-xs">
             <div class="flex items-center gap-2">
               <span class="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500"></span>
-              <span class="text-slate-600">E.Leclerc</span>
+              <span class="text-[#42493e]">E.Leclerc</span>
             </div>
             <div class="flex items-center gap-2">
               <span class="inline-block h-2 w-2 animate-pulse rounded-full bg-red-500" style="animation-delay:0.3s"></span>
-              <span class="text-slate-600">Carrefour</span>
+              <span class="text-[#42493e]">Carrefour</span>
             </div>
             <div class="flex items-center gap-2">
               <span class="inline-block h-2 w-2 animate-pulse rounded-full bg-orange-500" style="animation-delay:0.6s"></span>
-              <span class="text-slate-600">Intermarché</span>
+              <span class="text-[#42493e]">Intermarché</span>
             </div>
             <div class="flex items-center gap-2">
               <span class="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500" style="animation-delay:0.9s"></span>
-              <span class="text-slate-600">Super U</span>
+              <span class="text-[#42493e]">Super U</span>
             </div>
           </div>
         </div>
@@ -122,7 +122,7 @@
 
       <%# Optimal cart banner -%>
       <% if optimal_cart.present? && optimal_cart.is_a?(Hash) %>
-        <div class="mb-8">
+        <div class="animate-slide-up animate-delay-1 mb-8">
           <%= render "comparisons/optimal_cart",
               optimal_cart: optimal_cart.transform_keys(&:to_sym),
               mode: mode %>
@@ -133,13 +133,13 @@
       <% if comp_items.any? %>
         <div class="mb-6">
           <div class="flex items-center justify-between">
-            <h2 class="text-2xl font-bold text-slate-900">Détail par produit</h2>
-            <span class="text-sm font-medium text-slate-500" role="status">
+            <h2 class="text-2xl font-bold text-[#1b1c1c]">Détail par produit</h2>
+            <span class="text-sm font-medium text-[#72796e]" role="status">
               <%= comp_items.size %> résultat<%= comp_items.size > 1 ? "s" : "" %>
             </span>
           </div>
         </div>
-        <div class="grid gap-4 auto-rows-max sm:grid-cols-2 lg:grid-cols-3">
+        <div class="grid auto-rows-max gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <% comp_items.each_with_index do |item, idx| %>
             <%= render "comparisons/product_card", item: item %>
           <% end %>
@@ -147,9 +147,9 @@
 
       <%# Fallback: single-store result (from CartBuilder) -%>
       <% elsif @result[:url].present? || @result[:details].present? %>
-        <div class="card">
+        <div class="card animate-slide-up animate-delay-1">
           <div class="card-body">
-            <h2 class="text-xl font-bold text-slate-900">✅ Panier prêt</h2>
+            <h2 class="text-xl font-bold text-[#1b1c1c]">✅ Panier prêt</h2>
             <% if @result[:url].present? %>
               <p class="mt-4">
                 <a href="<%= @result[:url] %>" target="_blank" rel="noopener noreferrer"
@@ -161,15 +161,15 @@
             <% end %>
             <% details = (@result[:details] || {}).is_a?(Hash) ? @result[:details].transform_keys(&:to_sym) : {} %>
             <% if details[:addedCount].present? %>
-              <div class="mt-4 rounded-lg bg-emerald-50 p-3 border border-emerald-200">
-                <p class="text-sm text-emerald-900">
+              <div class="mt-4 rounded-lg border border-[#a1d494] bg-[#ecf9e8] p-3">
+                <p class="text-sm text-[#154212]">
                   <strong><%= details[:addedCount] %></strong> produit<%= details[:addedCount] != 1 ? "s" : "" %> ajouté<%= details[:addedCount] != 1 ? "s" : "" %> 
                   sur <strong><%= details[:requestedCount] || items.size %></strong>
                 </p>
               </div>
             <% end %>
             <% Array(details[:notFoundItems]).each do |nf| %>
-              <div class="mt-2 text-sm text-amber-700">❌ Non trouvé : <%= nf %></div>
+              <div class="mt-2 text-sm text-[#92400e]">❌ Non trouvé : <%= nf %></div>
             <% end %>
           </div>
         </div>
@@ -177,10 +177,10 @@
 
     <% else %>
       <%# ── Unknown/expired state ── %>
-      <div class="card text-center">
+      <div class="card animate-slide-up text-center">
         <div class="card-body">
-          <p class="text-lg text-slate-600 mb-4">⏱️ Résultat indisponible ou expiré</p>
-          <p class="text-sm text-slate-500 mb-6">Veuillez relancer une nouvelle comparaison.</p>
+          <p class="mb-4 text-lg text-[#42493e]">⏱️ Résultat indisponible ou expiré</p>
+          <p class="mb-6 text-sm text-[#72796e]">Veuillez relancer une nouvelle comparaison.</p>
           <%= link_to "Nouvelle comparaison", root_path,
               class: "btn btn-primary btn-lg" %>
         </div>

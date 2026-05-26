@@ -80,7 +80,7 @@ RSpec.describe "Comparaison par strategie", type: :system do
 
         stores = result.dig(:comparison, :optimal_cart, :stores) || {}
         store_keys = stores.keys.map(&:to_s)
-        expect(store_keys).to eq(["leclerc"])
+        expect(store_keys).to eq([ "leclerc" ])
       end
     end
   end
@@ -260,7 +260,7 @@ RSpec.describe "Comparaison par strategie", type: :system do
       processing: false,
       mode: mode,
       strategy: strategy,
-      items: [query],
+      items: [ query ],
       errors: []
     }
 

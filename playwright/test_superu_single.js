@@ -16,7 +16,7 @@ const args = minimist(process.argv.slice(2), {
 console.log("\n🟪 Démarrage Audit Super U");
 console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
-await runSingleStoreAudit({
+const result = await runSingleStoreAudit({
   storeKey: "superu",
   city: String(args.city || "Paris"),
   query: String(args.query || "pâtes"),
@@ -28,4 +28,4 @@ await runSingleStoreAudit({
 assertUnitNormalization();
 
 console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-console.log("🟢 Super U validée (CDP)\n");
+console.log(`🟢 Super U validée (${result.live ? "CDP" : "fallback offline"})\n`);

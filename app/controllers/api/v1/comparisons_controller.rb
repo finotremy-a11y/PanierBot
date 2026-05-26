@@ -6,6 +6,29 @@ class Api::V1::ComparisonsController < Api::V1::BaseController
     started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     payload = compare_params
 
+    identifier = request.remote_ip.presence || request.user_agent.to_s.first(32)
+    unless ComparisonResilience.allow_request?(scope: "api_compare", identifier: identifier, limit: 12, period: 1.minute)
+      return render json: {
+        success: false,
+        error: "rate_limited",
+        message: "Too many comparison requests. Retry later.",
+        code: "rate_limit_exceeded"
+      }, status: :too_many_requests
+    end
+
+    signature = ComparisonResilience.build_signature(
+      items: payload[:items],
+      strategy: payload[:strategy],
+      mode: payload[:mode],
+      city: params[:city]
+    )
+
+    cached_result = ComparisonResilience.fetch_cached_result(signature, namespace: "api")
+    if cached_result.present?
+      execution_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at) * 1000.0).round(2)
+      return render json: cached_result.merge(cached: true, execution_time_ms: execution_ms), status: :ok
+    end
+
     result = FinalCartBuilder.new(
       items: payload[:items],
       strategy: payload[:strategy],
@@ -14,7 +37,7 @@ class Api::V1::ComparisonsController < Api::V1::BaseController
 
     execution_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at) * 1000.0).round(2)
 
-    render json: {
+    response_payload = {
       success: result[:success],
       mode: payload[:mode],
       strategy: payload[:strategy],
@@ -27,7 +50,11 @@ class Api::V1::ComparisonsController < Api::V1::BaseController
       logs: result[:logs],
       execution_time_ms: execution_ms,
       errors: result[:errors]
-    }, status: result[:success] ? :ok : :unprocessable_entity
+    }
+
+    ComparisonResilience.write_cached_result(signature, response_payload, namespace: "api")
+
+    render json: response_payload, status: result[:success] ? :ok : :unprocessable_entity
   end
 
   private
